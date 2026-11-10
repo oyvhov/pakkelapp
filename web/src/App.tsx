@@ -127,7 +127,7 @@ function Shell({ children }: { children: ReactNode }) {
       <header className="topbar">
         <Link to="/" className="brand small"><Logo size={26} /><span>Pakke<i>lapp</i></span></Link>
         <div className="topbar-actions">
-          <Link to="/nissen" className="icon-btn" aria-label="Nissen"><Sparkles size={20} /></Link>
+          {data.config.aiEnabled && <Link to="/nissen" className="nisse-chip"><Sparkles size={16} /> Nissen</Link>}
           <Link to="/meg" aria-label="Innstillingar"><Avatar person={data.myPerson} size={34} /></Link>
         </div>
       </header>

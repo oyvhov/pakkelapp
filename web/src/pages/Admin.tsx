@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { ArrowLeft, Copy, DatabaseBackup, EyeOff, KeyRound, RefreshCw } from 'lucide-react';
 import { useData } from '../data';
 import { errorText, pb } from '../lib';
+import { AdminTests } from './AdminTests';
 import { Avatar, Field, LoadError, Sheet, Skeleton, Switch, useConfirm, useToast } from '../ui';
 
 interface Overview {
@@ -127,6 +128,8 @@ export function AdminPage() {
         <p className="muted">{state.backups.count} backupar lagra{state.backups.last ? `, sist ${new Date(state.backups.last).toLocaleString('nb-NO', { dateStyle: 'medium', timeStyle: 'short' })}` : ''}. Det blir teke backup kvar natt.</p>
         <button className="btn ghost" onClick={() => void backup()} disabled={busy}><DatabaseBackup size={16} /> {busy ? 'Tek backup …' : 'Ta backup no'}</button>
       </section>
+
+      <AdminTests />
 
       <Sheet open={!!resetUrl} onClose={() => setResetUrl('')} title="Lenke for nytt passord">
         <p className="muted">Send denne lenka til vedkomande. Ho gjeld berre éin gong.</p>

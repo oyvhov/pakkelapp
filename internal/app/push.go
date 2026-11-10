@@ -64,8 +64,20 @@ func (p *pusher) throttled(key string, wait time.Duration) bool {
 
 // send legg varselet på alle einingar brukarane har slått på denne typen varsel for.
 func (p *pusher) send(app core.App, users []string, kind, title, body, url string) {
+	p.deliver(app, users, kind, title, body, url)
+}
+
+// pushReport fortel kva som skjedde med eit varsel, så administrator kan teste.
+type pushReport struct {
+	Sent   int      `json:"sent"`
+	Gone   int      `json:"gone"`
+	Errors []string `json:"errors"`
+}
+
+func (p *pusher) deliver(app core.App, users []string, kind, title, body, url string) pushReport {
+	report := pushReport{Errors: []string{}}
 	if p == nil {
-		return
+		return report
 	}
 	payload, _ := json.Marshal(map[string]string{"title": title, "body": body, "url": url})
 	for _, user := range uniqueStrings(users) {
@@ -80,15 +92,23 @@ func (p *pusher) send(app core.App, users []string, kind, title, body, url strin
 			}, &webpush.Options{HTTPClient: &http.Client{Timeout: 15 * time.Second}, Subscriber: p.subject, VAPIDPublicKey: p.public, VAPIDPrivateKey: p.private, TTL: 86400})
 			if err != nil {
 				log.Printf("varsel: %v", err)
+				report.Errors = append(report.Errors, err.Error())
 				continue
 			}
 			_, _ = io.Copy(io.Discard, res.Body)
 			res.Body.Close()
-			if res.StatusCode == http.StatusGone || res.StatusCode == http.StatusNotFound {
+			switch {
+			case res.StatusCode == http.StatusGone || res.StatusCode == http.StatusNotFound:
 				_ = app.Delete(sub) // Eininga har slått av varsel.
+				report.Gone++
+			case res.StatusCode >= 300:
+				report.Errors = append(report.Errors, fmt.Sprintf("varseltenesta svarte %d", res.StatusCode))
+			default:
+				report.Sent++
 			}
 		}
 	}
+	return report
 }
 
 func (s *server) pushKey(e *core.RequestEvent) error {
@@ -132,6 +152,39 @@ func (s *server) registerNotify(pb *pocketbase.PocketBase) {
 	}
 	pb.OnRecordCreate("push_subs").BindFunc(checkEndpoint)
 	pb.OnRecordUpdate("push_subs").BindFunc(checkEndpoint)
+
+	// Den som får eit ønske delt med seg, får beskjed.
+	pb.OnRecordAfterUpdateSuccess("gifts").BindFunc(func(e *core.RecordEvent) error {
+		before := map[string]bool{}
+		for _, u := range e.Record.Original().GetStringSlice("shared_with") {
+			before[u] = true
+		}
+		var added []string
+		for _, u := range e.Record.GetStringSlice("shared_with") {
+			if !before[u] {
+				added = append(added, u)
+			}
+		}
+		if len(added) > 0 {
+			gift := e.Record
+			go func() {
+				list, err := pb.FindRecordById("lists", gift.GetString("list"))
+				if err != nil {
+					return
+				}
+				owner, err := pb.FindRecordById("users", list.GetString("owner"))
+				if err != nil {
+					return
+				}
+				url := "/"
+				if p := list.GetString("person"); p != "" {
+					url = "/folk/" + p
+				}
+				s.push.send(pb, added, "wishes", fmt.Sprintf("%s delte eit ønske med deg", firstWord(owner.GetString("name"))), gift.GetString("title"), url)
+			}()
+		}
+		return e.Next()
+	})
 
 	// Nye ønske går til dei som har personen på lista si.
 	pb.OnRecordAfterCreateSuccess("gifts").BindFunc(func(e *core.RecordEvent) error {
@@ -368,12 +421,37 @@ func (s *server) sendReminders(app core.App) {
 }
 
 func (s *server) remindChristmas(app core.App, days int) {
+	for user, n := range s.missingGifts(app, "") {
+		title, body := christmasReminder(days, n)
+		s.push.send(app, []string{user}, "reminders", title, body, "/")
+	}
+}
+
+// christmasReminder er teksten i påminninga før jul.
+func christmasReminder(days, missing int) (title, body string) {
+	title = fmt.Sprintf("%d dagar til julaften", days)
+	if days == 1 {
+		title = "I morgon er det julaften"
+	}
+	body = fmt.Sprintf("%d personar manglar gåve frå deg.", missing)
+	if missing == 1 {
+		body = "1 person manglar gåve frå deg."
+	}
+	return title, body
+}
+
+// missingGifts tel kor mange kvar brukar manglar gåve til. Med only blir berre den brukaren rekna.
+func (s *server) missingGifts(app core.App, only string) map[string]int {
 	season := seasonYear(s.now())
-	marks, _ := app.FindAllRecords("recipients", dbx.HashExp{"year": season})
+	filter := dbx.HashExp{"year": season}
+	if only != "" {
+		filter["user"] = only
+	}
+	marks, _ := app.FindAllRecords("recipients", filter)
 	missing := map[string]int{}
 	f, err := loadFamily(app)
 	if err != nil {
-		return
+		return missing
 	}
 	for _, m := range marks {
 		if m.GetBool("done") {
@@ -387,17 +465,7 @@ func (s *server) remindChristmas(app core.App, days int) {
 			missing[user]++
 		}
 	}
-	when := fmt.Sprintf("%d dagar til julaften", days)
-	if days == 1 {
-		when = "I morgon er det julaften"
-	}
-	for user, n := range missing {
-		who := fmt.Sprintf("%d personar manglar gåve frå deg.", n)
-		if n == 1 {
-			who = "1 person manglar gåve frå deg."
-		}
-		s.push.send(app, []string{user}, "reminders", when, who, "/")
-	}
+	return missing
 }
 
 // checkWatchedPrices sjekkar gåver brukarane følgjer, og varslar om prisfall.

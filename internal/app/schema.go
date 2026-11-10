@@ -106,9 +106,9 @@ func ensureSchema(app core.App) error {
 	people, err := upsert(app, "people", func(c *core.Collection) {
 		// Alle med konto kan finne kvarandre. Personar utan konto ser berre den som la dei inn,
 		// og dei som alt har valt personen som mottakar.
-		seePerson := all(authed, fmt.Sprintf(`(user != "" || created_by = %[1]s || recipients_via_person.user ?= %[1]s)`, me))
-		c.ListRule = rule(seePerson)
-		c.ViewRule = rule(seePerson)
+		// Regelen blir fullført nedanfor, når samlinga med mottakarar finst.
+		c.ListRule = rule(all(authed, fmt.Sprintf(`(user != "" || created_by = %[1]s)`, me)))
+		c.ViewRule = c.ListRule
 		// Kven som ber kostnadene, kan berre endrast gjennom ruta som krev samtykke.
 		guarded := []string{"@request.body.user:isset = false", "@request.body.covered_by:isset = false", "@request.body.covered_request:isset = false", "@request.body.covered_request_by:isset = false"}
 		// Detaljar og bilete av andre ligg i person_notes og photos, der berre den som skreiv dei ser dei.
@@ -184,12 +184,13 @@ func ensureSchema(app core.App) error {
 	gifts, err := upsert(app, "gifts", func(c *core.Collection) {
 		// Medgjevarar ser gåva sjølv om lista er privat, og kan følgje ho opp, men ikkje byte kven ho er til eller frå.
 		giver := "givers.user ?= " + me
-		view := all(authed, fmt.Sprintf("(%s || %s)", canSee("list."), giver), notSpoiled)
+		// Eit enkelt ønske kan delast med utvalde, utan å dele heile lista.
+		view := all(authed, fmt.Sprintf("(%s || %s || shared_with.id ?= %s)", canSee("list."), giver, me), notSpoiled)
 		c.ListRule = rule(view)
 		c.ViewRule = rule(view)
 		c.CreateRule = rule(all(authed, "@request.body.created_by = "+me, canEdit("list.")))
 		c.UpdateRule = rule(all(authed, notSpoiled, "@request.body.list:isset = false", "@request.body.created_by:isset = false",
-			fmt.Sprintf("(%s || (%s && @request.body.givers:isset = false && @request.body.recipients:isset = false))", canEdit("list."), giver)))
+			fmt.Sprintf("(%s || (%s && @request.body.givers:isset = false && @request.body.recipients:isset = false && @request.body.shared_with:isset = false))", canEdit("list."), giver)))
 		c.DeleteRule = rule(all(authed, canEdit("list."), notSpoiled))
 		c.Fields.Add(
 			&core.RelationField{Name: "list", CollectionId: lists.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
@@ -213,6 +214,7 @@ func ensureSchema(app core.App) error {
 			&core.RelationField{Name: "recipients", CollectionId: people.Id, MaxSelect: 50},
 			&core.RelationField{Name: "givers", CollectionId: people.Id, MaxSelect: 50},
 			&core.RelationField{Name: "created_by", CollectionId: users.Id, MaxSelect: 1},
+			&core.RelationField{Name: "shared_with", CollectionId: users.Id, MaxSelect: 200},
 		)
 		c.AddIndex("idx_gifts_list", false, "list", "")
 	})
@@ -223,7 +225,7 @@ func ensureSchema(app core.App) error {
 	// Den som er med og gjev ei gåve, får sjå lista ho ligg i, men ikkje dei andre gåvene der.
 	// Regelen peikar tilbake frå gåvene, så han kan fyrst setjast når dei finst.
 	_, err = upsert(app, "lists", func(c *core.Collection) {
-		view := all(authed, fmt.Sprintf("(%s || gifts_via_list.givers.user ?= %s)", canSee(""), me))
+		view := all(authed, fmt.Sprintf("(%[1]s || gifts_via_list.givers.user ?= %[2]s || gifts_via_list.shared_with.id ?= %[2]s)", canSee(""), me))
 		c.ListRule = rule(view)
 		c.ViewRule = rule(view)
 	})
@@ -232,7 +234,7 @@ func ensureSchema(app core.App) error {
 	}
 
 	_, err = upsert(app, "claims", func(c *core.Collection) {
-		view := all(authed, canSee("gift.list."), wishPrivate)
+		view := all(authed, fmt.Sprintf("(%s || gift.shared_with.id ?= %s)", canSee("gift.list."), me), wishPrivate)
 		c.ListRule = rule(view)
 		c.ViewRule = rule(view)
 		c.CreateRule = rule(all(view, "@request.body.user = "+me))
@@ -258,7 +260,7 @@ func ensureSchema(app core.App) error {
 	}
 
 	_, err = upsert(app, "comments", func(c *core.Collection) {
-		view := all(authed, fmt.Sprintf("(%s || gift.givers.user ?= %s)", canSee("gift.list."), me), fmt.Sprintf(`((%s) || (gift.list.kind = "plan" && (gift.created_by = %s || gift.recipients.user != %s)))`, wishPrivate, me, me))
+		view := all(authed, fmt.Sprintf("(%[1]s || gift.givers.user ?= %[2]s || gift.shared_with.id ?= %[2]s)", canSee("gift.list."), me), fmt.Sprintf(`((%s) || (gift.list.kind = "plan" && (gift.created_by = %s || gift.recipients.user != %s)))`, wishPrivate, me, me))
 		c.ListRule = rule(view)
 		c.ViewRule = rule(view)
 		c.CreateRule = rule(all(view, "@request.body.user = "+me))
@@ -277,7 +279,7 @@ func ensureSchema(app core.App) error {
 
 	// Reservasjonar frå gjester utan konto. Dei blir berre skrivne av ruta for deleleink.
 	_, err = upsert(app, "guest_claims", func(c *core.Collection) {
-		view := all(authed, canSee("gift.list."), wishPrivate)
+		view := all(authed, fmt.Sprintf("(%s || gift.shared_with.id ?= %s)", canSee("gift.list."), me), wishPrivate)
 		c.ListRule = rule(view)
 		c.ViewRule = rule(view)
 		c.Fields.Add(
@@ -350,8 +352,7 @@ func ensureSchema(app core.App) error {
 		mine := all(authed, "user = "+me)
 		c.ListRule = rule(mine)
 		c.ViewRule = rule(mine)
-		// Ein kan berre velje personar ein alt kan sjå, så ingen får tilgang ved å gjette ein id.
-		c.CreateRule = rule(all(authed, "@request.body.user = "+me, fmt.Sprintf(`(@request.body.person.user != "" || @request.body.person.created_by = %[1]s || @request.body.person.recipients_via_person.user ?= %[1]s)`, me)))
+		c.CreateRule = rule(all(authed, "@request.body.user = "+me, fmt.Sprintf(`(@request.body.person.user != "" || @request.body.person.created_by = %[1]s)`, me)))
 		c.UpdateRule = rule(all(mine, "@request.body.user:isset = false", "@request.body.person:isset = false", "@request.body.year:isset = false"))
 		c.DeleteRule = rule(mine)
 		c.Fields.Add(
@@ -363,6 +364,23 @@ func ensureSchema(app core.App) error {
 			&core.NumberField{Name: "sort", OnlyInt: true},
 		)
 		c.AddIndex("idx_recipients_unique", true, "user, person, year", "")
+	})
+	if err != nil {
+		return err
+	}
+
+	// Personar utan konto ser òg dei som alt har valt personen som mottakar.
+	people, err = upsert(app, "people", func(c *core.Collection) {
+		seePerson := all(authed, fmt.Sprintf(`(user != "" || created_by = %[1]s || recipients_via_person.user ?= %[1]s)`, me))
+		c.ListRule = rule(seePerson)
+		c.ViewRule = rule(seePerson)
+	})
+	if err != nil {
+		return err
+	}
+	_, err = upsert(app, "recipients", func(c *core.Collection) {
+		// Ein kan berre velje personar ein alt kan sjå, så ingen får tilgang ved å gjette ein id.
+		c.CreateRule = rule(all(authed, "@request.body.user = "+me, fmt.Sprintf(`(@request.body.person.user != "" || @request.body.person.created_by = %[1]s || @request.body.person.recipients_via_person.user ?= %[1]s)`, me)))
 	})
 	if err != nil {
 		return err

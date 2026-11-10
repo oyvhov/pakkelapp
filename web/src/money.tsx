@@ -25,7 +25,7 @@ export function ExpenseSheet({ draft, onClose }: { draft: ExpenseDraft | null; o
   const [busy, setBusy] = useState(false);
   return (
     <Sheet
-      open={!!draft} onClose={onClose} protect title={draft?.editing ? 'Endre utlegg' : draft?.kind === 'refund' ? 'Ny refusjon' : 'Nytt utlegg'}
+      open={!!draft} onClose={onClose} mobileEditor protect title={draft?.editing ? 'Endre utlegg' : draft?.kind === 'refund' ? 'Ny refusjon' : 'Nytt utlegg'}
       footer={<button className="btn primary full" type="submit" form="expense-form" disabled={busy}>{busy ? 'Lagrar …' : 'Lagre'}</button>}
     >
       {draft && <ExpenseForm key={draft.editing?.id ?? draft.giftId ?? 'ny'} draft={draft} onClose={onClose} onBusy={setBusy} />}

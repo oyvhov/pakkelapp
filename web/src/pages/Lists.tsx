@@ -1,12 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Archive, ArrowLeft, Copy, Globe2, Lock, Plus, Settings2, Users } from 'lucide-react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Archive, ArrowLeft, Copy, Lock, Plus, Settings2, Users } from 'lucide-react';
 import { useData } from '../data';
 import { GiftView, useGifts, ViewToggle } from '../gifts';
 import { badAmount, canEditList, errorText, isJul, kr, listLabel, OCCASIONS, parseAmount, pb, STATUSES, type GiftList, type Occasion } from '../lib';
 import { Avatar, Empty, Field, Segmented, Sheet, Switch, useConfirm, useToast } from '../ui';
 
-const VIS = { private: { label: 'Privat', icon: Lock }, family: { label: 'Heile familien', icon: Globe2 }, shared: { label: 'Delt', icon: Users } };
+const VIS = { private: { label: 'Privat', icon: Lock }, family: { label: 'Privat', icon: Lock }, shared: { label: 'Delt', icon: Users } };
 
 function ListCard({ list }: { list: GiftList }) {
   const data = useData();
@@ -87,7 +87,6 @@ export function ListsPage() {
   const current = jul.filter((l) => l.kind === 'wishes' || l.year === data.season);
   const mine = current.filter((l) => l.owner === data.me.id);
   const shared = current.filter((l) => l.owner !== data.me.id && l.visibility === 'shared');
-  const family = current.filter((l) => l.owner !== data.me.id && l.visibility === 'family');
   const others = data.lists.filter((l) => !isJul(l)).sort((a, b) => (a.event_date || '9').localeCompare(b.event_date || '9'));
   const old = jul.filter((l) => l.kind === 'plan' && l.year !== data.season).sort((a, b) => b.year - a.year);
   const group = (title: string, items: GiftList[]) => items.length > 0 && (
@@ -104,11 +103,10 @@ export function ListsPage() {
       </header>
       {group('Mine', mine)}
       {group('Delt med meg', shared)}
-      {group('Familien', family)}
       {group('Andre høve', others)}
       {group('Tidlegare år', old)}
       {data.lists.length === 0 && <Empty title="Ingen lister enno" />}
-      <Sheet open={adding} onClose={() => setAdding(false)} title="Ny liste" protect>
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Ny liste" mobileEditor protect>
         {adding && <ListForm onDone={(l) => { setAdding(false); navigate(`/lister/${l.id}`); }} />}
       </Sheet>
     </div>
@@ -220,7 +218,8 @@ export function ListPage() {
   const toast = useToast();
   const confirm = useConfirm();
   const { addGift } = useGifts();
-  const [settings, setSettings] = useState(false);
+  const [params] = useSearchParams();
+  const [settings, setSettings] = useState(params.get('del') === '1');
   const [person, setPerson] = useState('');
   const [status, setStatus] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -286,7 +285,7 @@ export function ListPage() {
         ? <Empty title={all.length ? 'Ingen gåver her' : 'Lista er tom'}>{all.length ? 'Prøv eit anna filter.' : undefined}</Empty>
         : <GiftView gifts={shown} group={list.kind === 'plan' && !viewing} />}
 
-      <Sheet open={settings} onClose={() => setSettings(false)} title="Liste og deling">
+      <Sheet open={settings} onClose={() => setSettings(false)} title="Liste og deling" mobileEditor>
         {settings && <ShareForm list={list} onDone={() => setSettings(false)} />}
         {settings && isOwner && <button className="btn ghost danger full spaced" onClick={remove}>Slett lista</button>}
       </Sheet>

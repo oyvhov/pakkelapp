@@ -379,6 +379,14 @@ export function HomePage() {
         <button className="icon-btn primary" aria-label="Legg til"><Plus size={20} /></button>
       </form>
 
+      {data.config.aiEnabled && (
+        <Link className="thanks-bar nisse-bar" to="/nissen">
+          <Sparkles size={18} />
+          <span><strong>Treng du idear?</strong><small>Spør Nissen om gåver til dei du skal gje til.</small></span>
+          <ArrowRight size={17} />
+        </Link>
+      )}
+
       {next && (
         <p className="next" key={next.key}>
           <i className="next-icon" aria-hidden="true">{next.icon}</i>

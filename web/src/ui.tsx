@@ -65,7 +65,7 @@ window.addEventListener('popstate', (e) => {
   else if (depth < openSheets.length) openSheets[openSheets.length - 1].close();
 });
 
-export function Sheet({ open, onClose, title, children, footer, protect }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; protect?: boolean }) {
+export function Sheet({ open, onClose, title, children, footer, protect, mobileEditor }: { open: boolean; onClose: () => void; title: string; children: ReactNode; footer?: ReactNode; protect?: boolean; mobileEditor?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   const headingId = useId();
   const [mounted, setMounted] = useState(open);
@@ -105,7 +105,8 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
   useEffect(() => {
     const viewport = window.visualViewport;
     const dialog = ref.current;
-    if (!open || !viewport || !dialog) return;
+    const body = dialog?.querySelector<HTMLElement>('.sheet-body');
+    if (!open || !viewport || !dialog || !body) return;
     const fit = () => {
       const bottom = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
       if (viewport.scale === 1 && viewport.height < window.innerHeight - 1) {
@@ -118,14 +119,24 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
         dialog.style.bottom = '';
       }
     };
+    const observer = new ResizeObserver(() => {
+      const field = document.activeElement;
+      if (!field?.matches('input, textarea, select') || !body.contains(field) || viewport.scale !== 1) return;
+      const bounds = body.getBoundingClientRect();
+      const input = field.getBoundingClientRect();
+      if (input.top < bounds.top || input.height > bounds.height) body.scrollTop += input.top - bounds.top - 8;
+      else if (input.bottom > bounds.bottom) body.scrollTop += input.bottom - bounds.bottom + 8;
+    });
     fit();
+    observer.observe(body);
     viewport.addEventListener('resize', fit);
     viewport.addEventListener('scroll', fit);
     return () => {
+      observer.disconnect();
       viewport.removeEventListener('resize', fit);
       viewport.removeEventListener('scroll', fit);
     };
-  }, [open]);
+  }, [open, mounted]);
 
   // Eit skjema med innhald skal ikkje forsvinne ved eit feiltrykk.
   const requestClose = async () => {
@@ -158,7 +169,7 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
   }, [open]);
 
   const onDown = (e: ReactPointerEvent) => {
-    if (!e.isPrimary || e.button !== 0 || !window.matchMedia('(max-width: 639px)').matches || (e.target as Element).closest('button')) return;
+    if (mobileEditor || !e.isPrimary || e.button !== 0 || !window.matchMedia('(max-width: 639px)').matches || (e.target as Element).closest('button')) return;
     drag.current = { startY: e.clientY, dy: 0 };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     if (ref.current) ref.current.style.transition = 'none';
@@ -182,7 +193,7 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
     <dialog
       ref={ref}
       aria-labelledby={headingId}
-      className={`sheet ${closing ? 'closing' : ''}`}
+      className={`sheet ${mobileEditor ? 'sheet-editor' : ''} ${closing ? 'closing' : ''}`}
       onCancel={(e) => { e.preventDefault(); void requestClose(); }}
       onClose={() => { if (open) onClose(); }}
       onMouseDown={(e) => { if (e.target === ref.current) void requestClose(); }}
@@ -195,7 +206,9 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
           }}>
             <span className="grabber" aria-hidden="true" />
             <h2 id={headingId}>{view.title}</h2>
-            <button type="button" className="icon-btn" onClick={() => void requestClose()} aria-label="Lukk"><X size={20} /></button>
+            <button type="button" className="icon-btn sheet-close" onClick={() => void requestClose()} aria-label="Lukk" title="Lukk">
+              <X size={20} aria-hidden="true" />
+            </button>
           </header>
           <div
             className="sheet-body"

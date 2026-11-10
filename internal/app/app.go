@@ -143,6 +143,10 @@ func Register(pb *pocketbase.PocketBase, cfg Config) {
 		admin.POST("/reset-link", s.resetLink)
 		admin.POST("/invite/rotate", s.adminRotateInvite)
 		admin.POST("/backup", s.adminBackup)
+		admin.GET("/test", s.adminTestStatus)
+		admin.POST("/test/push", s.adminTestPush)
+		admin.POST("/test/reminder", s.adminTestReminder)
+		admin.POST("/test/nisse", s.adminTestNisse)
 
 		for _, name := range seasonAssets {
 			se.Router.GET("/"+name, s.seasonAsset(name))

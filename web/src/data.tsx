@@ -244,7 +244,6 @@ export function audienceOf(data: DataValue, list: GiftList) {
   const others = data.people.filter((p) => p.user && p.user !== data.me.id);
   const link = list.share_token ? ' Alle med delingslenka kan òg sjå dei.' : '';
   if (list.visibility === 'private') return { people: [] as Person[], label: 'Berre du', short: 'Berre du ser dei', hint: `Ingen andre i familien kan sjå dei.${link}` };
-  if (list.visibility === 'family') return { people: others, label: 'Heile familien', short: 'Heile familien ser dei', hint: `Alle med konto kan sjå dei.${link}` };
   const people = others.filter((p) => list.editors.includes(p.user) || list.viewers.includes(p.user));
   return { people, label: people.map((p) => firstName(p.name)).join(', ') || 'Ingen utvalde', short: `${people.length} utvalde ser dei`, hint: `Berre dei du har valt.${link}` };
 }

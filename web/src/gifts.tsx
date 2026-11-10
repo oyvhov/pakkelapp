@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type DragEvent, type ReactNode } from 'react';
-import { Archive, ArchiveRestore, BadgeCheck, Camera, ChevronDown, ExternalLink, Heart, LayoutGrid, Link2, List, Loader2, Pencil, ReceiptText, Search, Send, Sparkles, Trash2, Users, X } from 'lucide-react';
+import { Archive, ArchiveRestore, BadgeCheck, Camera, ChevronDown, ExternalLink, Heart, LayoutGrid, Link2, List, Loader2, Pencil, ReceiptText, Search, Send, Share2, Sparkles, Trash2, Users, X } from 'lucide-react';
 import { badAmount, canEditList, firstName, errorText, fileUrl, haptic, isHttpUrl, isJul, isUpcoming, kr, money, names, parseAmount, pb, PRIORITIES, shortNames, STATUSES, type Claim, type Gift, type GiftList, type Offer, type Status } from './lib';
-import { claimerName, isNewWish, useData, useSeen } from './data';
+import { audienceOf, claimerName, isNewWish, useData, useSeen } from './data';
 import { Avatar, Field, GiftImage, PersonPicker, personBusy, radioKeys, Segmented, Sheet, Switch, useToast, waitForPerson, type ToastAction } from './ui';
 import { ExpenseSheet, type ExpenseDraft } from './money';
 
@@ -258,7 +258,7 @@ function GiftEditor({ open, draft, gift, onClose }: { open: boolean; draft: Draf
   const [busy, setBusy] = useState(false);
   return (
     <Sheet
-      open={open} onClose={onClose} protect title={gift ? 'Endre gåve' : draft.listId && draft.kind === 'wishes' ? 'Nytt ønske' : 'Ny gåve'}
+      open={open} onClose={onClose} mobileEditor protect title={gift ? 'Endre gåve' : draft.listId && draft.kind === 'wishes' ? 'Nytt ønske' : 'Ny gåve'}
       footer={<button className="btn primary full" type="submit" form="gift-form" disabled={busy}>{busy ? 'Lagrar …' : gift ? 'Lagre' : 'Legg til'}</button>}
     >
       {open && <EditorForm key={gift?.id ?? 'ny'} draft={draft} gift={gift} onClose={onClose} onBusy={setBusy} />}
@@ -659,6 +659,47 @@ function PriceBox({ gift, editable }: { gift: Gift; editable: boolean }) {
   );
 }
 
+/** Del eitt ønske med utvalde, utan å dele heile lista. */
+function WishShare({ gift }: { gift: Gift }) {
+  const data = useData();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const list = data.listsById.get(gift.list);
+  const shared = gift.shared_with ?? [];
+  const listAudience = list ? audienceOf(data, list).people : [];
+  const members = data.people.filter((p) => p.user && p.user !== data.me.id).sort((a, b) => a.name.localeCompare(b.name));
+  const sharedPeople = members.filter((p) => shared.includes(p.user));
+  const toggle = (user: string) => {
+    const next = shared.includes(user) ? shared.filter((u) => u !== user) : [...shared, user];
+    data.patch('gifts', (items) => items.map((g) => (g.id === gift.id ? { ...g, shared_with: next } : g)));
+    pb.collection('gifts').update(gift.id, { shared_with: next }).catch((err) => { toast(errorText(err)); void data.reload('gifts'); });
+  };
+  const who = [...new Set([...listAudience, ...sharedPeople].map((p) => firstName(p.name)))];
+  return (
+    <section className="wish-share">
+      <div className="wish-share-head">
+        <span><strong>Kven ser dette ønsket?</strong><small>{who.length ? who.join(', ') : 'Berre du'}</small></span>
+        <button type="button" className="btn small primary" onClick={() => setOpen(!open)} aria-expanded={open}><Share2 size={14} /> Del</button>
+      </div>
+      {open && (
+        <div className="wish-share-pick" role="group" aria-label="Del ønsket med">
+          {members.length === 0 && <p className="muted">Ingen andre har konto enno.</p>}
+          {members.map((p) => {
+            const viaList = listAudience.some((x) => x.id === p.id);
+            const on = viaList || shared.includes(p.user);
+            return (
+              <button key={p.id} type="button" className={`chip ${on ? 'on' : ''}`} aria-pressed={on} disabled={viaList} title={viaList ? 'Ser heile lista' : undefined} onClick={() => toggle(p.user)}>
+                <Avatar person={p} size={22} /> {firstName(p.name)}
+              </button>
+            );
+          })}
+          <p className="field-hint">Dei du vel, ser berre dette ønsket. Vil du dele alle ønska, gjer du det på lista.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function DetailBody({ gift, onClose }: { gift: Gift; onClose: () => void }) {
   const data = useData();
   const toast = useToast();
@@ -786,6 +827,7 @@ function DetailBody({ gift, onClose }: { gift: Gift; onClose: () => void }) {
         </div>
       )}
       {!isWish && <GiverShare gift={gift} />}
+      {isWish && list?.owner === data.me.id && <WishShare gift={gift} />}
       {gift.note && <p className="detail-note">{gift.note}</p>}
       {/^https?:\/\//i.test(gift.url) && <a className="btn ghost full" href={gift.url} target="_blank" rel="noreferrer noopener"><ExternalLink size={17} /> Opne i butikken</a>}
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Camera, Check, ChevronRight, Eye, Gift, Lock, Pencil, Plus, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, Check, Share2, Eye, Gift, Lock, Pencil, Plus, Sparkles } from 'lucide-react';
 import { audienceOf, giftsFor, saveNote, myWishLists, isDone, isMarked, isRecipient, markSeen, myGifts, myMark, newLabel, newWishCount, setBudget, setDone, setRecipient, useData, useSeen } from '../data';
 import { useCrop } from '../crop';
 import { GiftView, useGifts, ViewToggle } from '../gifts';
@@ -208,14 +208,14 @@ function WishAudience() {
       {lists.map((list) => {
         const who = audienceOf(data, list);
         return (
-          <Link key={list.id} className="who-row" to={`/lister/${list.id}`}>
+          <Link key={list.id} className="who-row" to={`/lister/${list.id}?del=1`}>
             <span className="who-text"><strong>{who.label}</strong><small>{lists.length > 1 && `${list.name}. `}{who.hint}</small></span>
             {who.people.length > 0 && <span className="stack">{who.people.slice(0, 5).map((p) => <Avatar key={p.id} person={p} size={28} />)}</span>}
-            <span className="who-edit">Endre <ChevronRight size={15} /></span>
+            <span className="btn small primary who-edit"><Share2 size={14} /> Del</span>
           </Link>
         );
       })}
-      <p className="ps-note">Du ser ikkje kven som har reservert eller kjøpt ei gåve til deg.</p>
+      <p className="ps-note">Vil du dele berre eitt ønske, opnar du ønsket og trykkjer Del. Du ser ikkje kven som har reservert eller kjøpt ei gåve til deg.</p>
     </section>
   );
 }
@@ -351,7 +351,7 @@ export function PeoplePage() {
           <div className="person-grid">{rest.map((p) => <PersonRow key={p.id} personId={p.id} />)}</div>
         </section>
       )}
-      <Sheet open={adding} onClose={() => setAdding(false)} title="Ny person" protect>
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Ny person" mobileEditor protect>
         {adding && <PersonForm onDone={() => setAdding(false)} />}
       </Sheet>
     </div>
@@ -536,7 +536,7 @@ export function PersonPage() {
         </>
       )}
 
-      <Sheet open={editing} onClose={() => setEditing(false)} title={`Endre ${person.name}`} protect>
+      <Sheet open={editing} onClose={() => setEditing(false)} title={`Endre ${person.name}`} mobileEditor protect>
         {editing && <PersonForm person={person} onDone={(p) => { setEditing(false); if (!p) navigate('/folk'); }} />}
       </Sheet>
     </div>

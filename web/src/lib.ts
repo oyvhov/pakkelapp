@@ -68,6 +68,7 @@ export interface Gift extends RecordModel {
   watch_price: boolean;
   archived: boolean;
   created_by: string;
+  shared_with: string[];
 }
 export interface Offer {
   shop: string;

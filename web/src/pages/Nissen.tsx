@@ -204,7 +204,7 @@ export function NissenPage() {
 
       <div className="person-select" role="group" aria-label="Kven er gåva til?">
         <button className={`chip ${!personId ? 'on' : ''}`} aria-pressed={!personId} onClick={() => choosePerson('')}>Nokon andre</button>
-        {data.people.filter((p) => p.user !== data.me.id).sort((a, b) => Number(isRecipient(data, b.id)) - Number(isRecipient(data, a.id))).map((p) => (
+        {data.people.filter((p) => p.user !== data.me.id && (isRecipient(data, p.id) || p.id === personId)).sort((a, b) => a.name.localeCompare(b.name)).map((p) => (
           <button key={p.id} className={`chip ${personId === p.id ? 'on' : ''}`} aria-pressed={personId === p.id} onClick={() => choosePerson(p.id)}>
             <Avatar person={p} size={22} /> {firstName(p.name)}
           </button>
