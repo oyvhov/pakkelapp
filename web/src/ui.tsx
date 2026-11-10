@@ -82,7 +82,12 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
       setClosing(false);
       setMounted(true);
       dirty.current = false;
-      if (dialog && !dialog.open) dialog.showModal();
+      if (mounted && dialog && !dialog.open) {
+        dialog.showModal();
+        if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+          dialog.querySelector<HTMLElement>('[data-initial-focus="true"]')?.focus({ preventScroll: true });
+        }
+      }
       if (dialog) dialog.style.transform = '';
       return;
     }
@@ -127,7 +132,7 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
   }, [open]);
 
   const onDown = (e: ReactPointerEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
+    if (!e.isPrimary || e.button !== 0 || !window.matchMedia('(max-width: 639px)').matches || (e.target as Element).closest('button')) return;
     drag.current = { startY: e.clientY, dy: 0 };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     if (ref.current) ref.current.style.transition = 'none';
@@ -158,7 +163,10 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
     >
       {mounted && (
         <div className="sheet-inner">
-          <header className="sheet-head" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+          <header className="sheet-head" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={() => {
+            drag.current = null;
+            if (ref.current) { ref.current.style.transition = ''; ref.current.style.transform = ''; }
+          }}>
             <span className="grabber" aria-hidden="true" />
             <h2 id={headingId}>{view.title}</h2>
             <button type="button" className="icon-btn" onClick={() => void requestClose()} aria-label="Lukk"><X size={20} /></button>
@@ -166,7 +174,7 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
           <div
             className="sheet-body"
             onInput={() => { dirty.current = true; }}
-            onClick={(e) => { if ((e.target as HTMLElement).closest('.chip, .segmented button, .picker-option')) dirty.current = true; }}
+            onClick={(e) => { if ((e.target as Element).closest('.chip, .segmented button, .picker-option, .swatches button, [role="switch"], .image-remove, .link-pill button')) dirty.current = true; }}
           >{view.children}</div>
           {view.footer && <footer className="sheet-foot">{view.footer}</footer>}
         </div>
@@ -372,7 +380,7 @@ export function Skeleton() {
 export function LoadError({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="page">
-      <Empty title="Fekk ikkje kontakt" action={<button className="btn primary" onClick={onRetry}>Prøv igjen</button>}>Lista di er trygg. Sjekk nettet og prøv på nytt.</Empty>
+      <Empty title="Fekk ikkje kontakt" action={<button className="btn primary" onClick={onRetry}>Prøv igjen</button>}>Sjekk nett­sambandet.</Empty>
     </div>
   );
 }

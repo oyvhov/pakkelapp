@@ -76,6 +76,9 @@ func Register(pb *pocketbase.PocketBase, cfg Config) {
 		if err := ensureSchema(se.App); err != nil {
 			return err
 		}
+		if err := unshareFamilyLists(se.App); err != nil {
+			return err
+		}
 		if err := ensureSettingsRecord(se.App, cfg.AIModel); err != nil {
 			return err
 		}
@@ -293,7 +296,7 @@ func (s *server) register(e *core.RequestEvent) error {
 		wishes := core.NewRecord(listsCol)
 		wishes.Set("name", "Ønska mine")
 		wishes.Set("kind", "wishes")
-		wishes.Set("visibility", "family")
+		wishes.Set("visibility", "private")
 		wishes.Set("owner", user.Id)
 		wishes.Set("person", person.Id)
 		wishes.Set("year", seasonYear(time.Now()))

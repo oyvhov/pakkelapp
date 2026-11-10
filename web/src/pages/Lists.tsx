@@ -45,7 +45,7 @@ function ListForm({ onDone }: { onDone: (l: GiftList) => void }) {
       const created = await pb.collection('lists').create<GiftList>({
         name: name.trim(), kind, owner: data.me.id, year: data.season,
         occasion, event_date: occasion === 'jul' ? '' : date,
-        visibility: kind === 'wishes' ? 'family' : 'private', person: kind === 'wishes' ? person : '',
+        visibility: 'private', person: kind === 'wishes' ? person : '',
       });
       await data.reload('lists');
       onDone(created);
@@ -191,7 +191,7 @@ function ShareForm({ list, onDone }: { list: GiftList; onDone: () => void }) {
         <>
           <div className="field">
             <span className="field-label">Kven kan sjå lista?</span>
-            <Segmented label="Synlegheit" value={visibility} onChange={setVisibility} options={[{ id: 'private', label: 'Berre eg' }, { id: 'shared', label: 'Utvalde' }, { id: 'family', label: 'Familien' }]} />
+            <Segmented label="Synlegheit" value={visibility} onChange={setVisibility} options={[{ id: 'private', label: 'Berre eg' }, { id: 'shared', label: 'Utvalde' }]} />
           </div>
           {visibility === 'shared' && (
             <div className="member-list">

@@ -426,7 +426,7 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
       if (!target && !gift) {
         const created = await pb.collection('lists').create<GiftList>({
           name: kind === 'wishes' ? 'Ønska mine' : 'Gåveplanen min', kind,
-          visibility: kind === 'wishes' ? 'family' : 'private', owner: data.me.id, year: data.season,
+          visibility: 'private', owner: data.me.id, year: data.season,
           person: kind === 'wishes' ? data.myPerson?.id : undefined,
         });
         await data.reload('lists');

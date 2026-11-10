@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/pocketbase/pocketbase/core"
@@ -15,11 +16,39 @@ const (
 
 // canSee er tilgangsregelen for ei liste. prefix peikar frå samlinga regelen står på, fram til lista.
 func canSee(prefix string) string {
-	return fmt.Sprintf(`(%[1]sowner = %[2]s || %[1]svisibility = "family" || (%[1]svisibility = "shared" && (%[1]seditors.id ?= %[2]s || %[1]sviewers.id ?= %[2]s)))`, prefix, me)
+	return fmt.Sprintf(`(%[1]sowner = %[2]s || (%[1]svisibility = "shared" && (%[1]seditors.id ?= %[2]s || %[1]sviewers.id ?= %[2]s)))`, prefix, me)
 }
 
 func canEdit(prefix string) string {
 	return fmt.Sprintf(`(%[1]sowner = %[2]s || (%[1]svisibility = "shared" && %[1]seditors.id ?= %[2]s))`, prefix, me)
+}
+
+// Ingen lister blir delte med alle med konto. Kven som ser ei liste, vel eigaren person for person.
+// Verdien "family" står att i skjemaet berre så gamle data kan lesast og ryddast.
+const noFamily = `@request.body.visibility != "family"`
+
+// unshareFamilyLists gjer om lister som var delte med alle. Har lista utvalde personar, held ho fram
+// med berre dei. Delingslenka blir trekt tilbake, sidan alle med konto kunne sjå ho.
+func unshareFamilyLists(app core.App) error {
+	records, err := app.FindRecordsByFilter("lists", `visibility = "family"`, "", 0, 0)
+	if err != nil {
+		return err
+	}
+	for _, r := range records {
+		vis := "private"
+		if len(r.GetStringSlice("editors")) > 0 || len(r.GetStringSlice("viewers")) > 0 {
+			vis = "shared"
+		}
+		r.Set("visibility", vis)
+		r.Set("share_token", "")
+		if err := app.SaveNoValidate(r); err != nil {
+			return err
+		}
+	}
+	if len(records) > 0 {
+		log.Printf("Gjorde om %d lister som var delte med alle.", len(records))
+	}
+	return nil
 }
 
 // notSpoiled skjuler ei planlagd gåve for den ho er meint til.
@@ -119,9 +148,9 @@ func ensureSchema(app core.App) error {
 	lists, err := upsert(app, "lists", func(c *core.Collection) {
 		c.ListRule = rule(all(authed, canSee("")))
 		c.ViewRule = rule(all(authed, canSee("")))
-		c.CreateRule = rule(all(authed, "@request.body.owner = "+me, `(@request.body.kind = "plan" || @request.body.person != "")`))
+		c.CreateRule = rule(all(authed, "@request.body.owner = "+me, noFamily, `(@request.body.kind = "plan" || @request.body.person != "")`))
 		// Listetype og person styrer spoilarvernet, så dei kan ikkje endrast etterpå.
-		c.UpdateRule = rule(all(authed, `@request.body.owner:isset = false`, `@request.body.kind:isset = false`, `@request.body.person:isset = false`, `@request.body.year:isset = false`, `@request.body.share_token:isset = false`, fmt.Sprintf(`(owner = %[1]s || (visibility = "shared" && editors.id ?= %[1]s && @request.body.editors:isset = false && @request.body.viewers:isset = false && @request.body.visibility:isset = false))`, me)))
+		c.UpdateRule = rule(all(authed, noFamily, `@request.body.owner:isset = false`, `@request.body.kind:isset = false`, `@request.body.person:isset = false`, `@request.body.year:isset = false`, `@request.body.share_token:isset = false`, fmt.Sprintf(`(owner = %[1]s || (visibility = "shared" && editors.id ?= %[1]s && @request.body.editors:isset = false && @request.body.viewers:isset = false && @request.body.visibility:isset = false))`, me)))
 		c.DeleteRule = rule(all(authed, "owner = "+me))
 		c.Fields.Add(
 			&core.TextField{Name: "name", Required: true, Max: 120},
