@@ -114,6 +114,7 @@ func Register(pb *pocketbase.PocketBase, cfg Config) {
 		private.POST("/preview", s.preview)
 		private.GET("/image", s.image)
 		private.POST("/ai/chat", s.aiChat)
+		private.POST("/ai/shops", s.aiShops)
 		private.POST("/ai/rhyme", s.aiRhyme)
 		private.POST("/ai/best-price", s.bestPrice)
 		private.POST("/ai/gift-price/{id}", s.giftPriceCheck)

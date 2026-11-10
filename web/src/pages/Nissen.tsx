@@ -7,7 +7,9 @@ import { errorText, firstName, kr, pb, type Person } from '../lib';
 import { Avatar, Empty } from '../ui';
 
 interface Suggestion { title: string; why: string; price_estimate: number; shop: string; url: string; search: string }
-interface Message { role: 'user' | 'assistant'; content: string; suggestions?: Suggestion[]; personId?: string }
+interface Message { id: number; role: 'user' | 'assistant'; content: string; suggestions?: Suggestion[]; personId?: string; finding?: boolean }
+interface ShopMatch { index: number; url: string; price: number; shop: string }
+let nextId = 0;
 
 interface Question {
   id: string;
@@ -126,24 +128,42 @@ export function NissenPage() {
   const ask = async (content: string) => {
     const clean = content.trim();
     if (!clean || busy) return;
-    const next: Message[] = [...messages, { role: 'user', content: clean }];
+    const next: Message[] = [...messages, { id: ++nextId, role: 'user', content: clean }];
     const run = ++chatRun.current;
     setMessages(next);
     setText('');
     setBusy(true);
     setError('');
     try {
-      const res = await pb.send<{ reply: string; suggestions: Suggestion[] }>('/api/jul/ai/chat', {
+      const res = await pb.send<{ reply: string; suggestions: Suggestion[]; findShops?: boolean }>('/api/jul/ai/chat', {
         method: 'POST',
         body: { messages: next.map(({ role, content: c }) => ({ role, content: c })), personId, budget: 0 },
       });
       if (run !== chatRun.current) return;
-      setMessages([...next, { role: 'assistant', content: res.reply || 'Her er nokre idear:', suggestions: res.suggestions, personId }]);
+      const reply: Message = { id: ++nextId, role: 'assistant', content: res.reply || 'Her er nokre idear:', suggestions: res.suggestions, personId, finding: !!res.findShops && res.suggestions.length > 0 };
+      setMessages([...next, reply]);
+      if (reply.finding) void findShops(reply);
     } catch (err) {
       if (run === chatRun.current) setError(errorText(err, 'Nissen svarte ikkje. Prøv igjen.'));
     } finally {
       if (run === chatRun.current) setBusy(false);
     }
+  };
+
+  // Butikkar og lenker kjem etter det raske svaret. Du kan halde fram å skrive medan Nissen leitar.
+  const findShops = async (reply: Message) => {
+    let shops: ShopMatch[] = [];
+    try {
+      shops = (await pb.send<{ shops: ShopMatch[] }>('/api/jul/ai/shops', { method: 'POST', body: { suggestions: reply.suggestions } })).shops ?? [];
+    } catch { /* Forslaga står seg utan butikk, med søkeknapp. */ }
+    setMessages((list) => list.map((m) => {
+      if (m.id !== reply.id) return m;
+      const suggestions = (m.suggestions ?? []).map((s, i) => {
+        const hit = shops.find((x) => x.index === i);
+        return hit ? { ...s, url: hit.url, shop: hit.shop || s.shop, price_estimate: hit.price > 0 ? hit.price : s.price_estimate } : s;
+      });
+      return { ...m, suggestions, finding: false };
+    }));
   };
 
   const finishGuide = (answers: Record<string, string>, save: Partial<Person>) => {
@@ -197,8 +217,8 @@ export function NissenPage() {
             <p>{person ? `Kva leitar du etter til ${first}?` : 'Spør i veg.'}</p>
           </div>
         )}
-        {messages.map((m, i) => (
-          <div key={i} className={`msg ${m.role}`}>
+        {messages.map((m) => (
+          <div key={m.id} className={`msg ${m.role}`}>
             <p>{m.content}</p>
             {m.suggestions && m.suggestions.length > 0 && (
               <div className="suggestions">
@@ -207,8 +227,9 @@ export function NissenPage() {
                     <h4>{s.title}</h4>
                     <p>{s.why}</p>
                     <div className="suggestion-meta">
-                      {s.price_estimate > 0 && <strong>ca. {kr(s.price_estimate)}</strong>}
+                      {s.price_estimate > 0 && <strong>{s.url ? kr(s.price_estimate) : `ca. ${kr(s.price_estimate)}`}</strong>}
                       {s.shop && <span>{s.shop}</span>}
+                      {m.finding && <span className="finding"><Loader2 size={13} className="spin" /> Finn butikk …</span>}
                     </div>
                     <div className="suggestion-actions">
                       <button className="btn small primary" onClick={() => addGift({ kind: 'plan', title: s.title, price: s.price_estimate, shop: s.shop, url: s.url, note: s.why, recipients: m.personId ? [m.personId] : [] })}>
@@ -216,7 +237,7 @@ export function NissenPage() {
                       </button>
                       {s.url ? (
                         <a className="btn small ghost" href={s.url} target="_blank" rel="noreferrer noopener"><ExternalLink size={14} /> Sjå</a>
-                      ) : (
+                      ) : m.finding ? null : (
                         <a className="btn small ghost" href={`https://www.prisjakt.no/search?search=${encodeURIComponent(s.search || s.title)}`} target="_blank" rel="noreferrer noopener"><Search size={14} /> Søk</a>
                       )}
                     </div>

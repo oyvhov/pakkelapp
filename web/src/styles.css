@@ -1169,3 +1169,6 @@ body::after { content: ''; position: fixed; inset: -25%; z-index: -2; pointer-ev
 .brand i, .auth-brand i { color: var(--brand-accent); }
 .rail .brand i, .auth-art .auth-brand i { color: #e8c67c; }
 [data-season='fest'] .rail .brand i, [data-season='fest'] .auth-art .auth-brand i { color: #f4a3b4; }
+
+/* Nissen leitar etter butikk etter det raske svaret. */
+.suggestion-meta .finding { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); }
