@@ -58,7 +58,7 @@ function ListForm({ onDone }: { onDone: (l: GiftList) => void }) {
   return (
     <form className="form" onSubmit={submit}>
       <Segmented label="Type liste" value={kind} onChange={setKind} options={[{ id: 'plan', label: 'Gåveplan' }, { id: 'wishes', label: 'Ønskeliste' }]} />
-      <Field label="Namn"><input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} autoFocus placeholder={kind === 'plan' ? 'Søskengåve til mamma' : 'Ønska til Emil'} /></Field>
+      <Field label="Namn"><input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} data-initial-focus="true" placeholder={kind === 'plan' ? 'Søskengåve til mamma' : 'Ønska til Emil'} /></Field>
       <div className="row-2">
         <Field label="Høve">
           <select value={occasion} onChange={(e) => setOccasion(e.target.value as Occasion)}>
@@ -107,8 +107,8 @@ export function ListsPage() {
       {group('Familien', family)}
       {group('Andre høve', others)}
       {group('Tidlegare år', old)}
-      {data.lists.length === 0 && <Empty title="Ingen lister enno" action={<button className="btn primary" onClick={() => setAdding(true)}><Plus size={18} /> Lag den fyrste</button>}>Ei ønskeliste eller ein gåveplan er ein god start.</Empty>}
-      <Sheet open={adding} onClose={() => setAdding(false)} title="Ny liste">
+      {data.lists.length === 0 && <Empty title="Ingen lister enno" />}
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Ny liste" protect>
         {adding && <ListForm onDone={(l) => { setAdding(false); navigate(`/lister/${l.id}`); }} />}
       </Sheet>
     </div>
@@ -138,10 +138,10 @@ function ShareLink({ list }: { list: GiftList }) {
       {url && (
         <>
           <div className="copy-row">
-            <input readOnly value={url} aria-label="Deleleink" onFocus={(e) => e.target.select()} />
+            <input readOnly value={url} aria-label="Delingslenke" onFocus={(e) => e.target.select()} />
             <button type="button" className="btn ghost" onClick={() => void copy()}><Copy size={16} /> Kopier</button>
           </div>
-          <p className="field-hint">Alle som har lenka, kan sjå denne lista. Slår du av delinga, sluttar lenka å verke.</p>
+          <p className="field-hint">Alle med lenka kan sjå lista til du slår av delinga.</p>
         </>
       )}
     </div>
@@ -283,7 +283,7 @@ export function ListPage() {
       )}
 
       {shown.length === 0
-        ? <Empty title={all.length ? 'Ingen gåver her' : 'Lista er tom'}>{all.length ? 'Prøv eit anna filter.' : 'Lim inn ei lenke for å kome i gang.'}</Empty>
+        ? <Empty title={all.length ? 'Ingen gåver her' : 'Lista er tom'}>{all.length ? 'Prøv eit anna filter.' : undefined}</Empty>
         : <GiftView gifts={shown} group={list.kind === 'plan' && !viewing} />}
 
       <Sheet open={settings} onClose={() => setSettings(false)} title="Liste og deling">

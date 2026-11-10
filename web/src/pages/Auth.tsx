@@ -5,24 +5,18 @@ import { useAuth } from '../data';
 import { Field, Logo } from '../ui';
 import { Garland } from '../decor';
 
-function AuthFrame({ title, lead, children }: { title: string; lead: string; children: ReactNode }) {
+function AuthFrame({ title, lead, children }: { title: string; lead?: string; children: ReactNode }) {
   return (
     <div className="auth">
-      <section className="auth-art" aria-hidden="true">
+      <section className="auth-art">
         <div className="snow" />
         <Garland />
         <div className="auth-brand"><Logo size={40} /><span>Pakke<i>lapp</i></span></div>
-        <div className="auth-tag">
-          <span className="tag-hole" />
-          <p><em>Til</em> heile familien</p>
-          <p><em>Frå</em> ein stad å samle alt</p>
-        </div>
-        <p className="auth-line">Ingen dobbeltkjøp.<br />Ingen avslørte overraskingar.</p>
       </section>
       <main className="auth-form">
         <div className="auth-card">
           <h1>{title}</h1>
-          <p className="lead">{lead}</p>
+          {lead && <p className="lead">{lead}</p>}
           {children}
         </div>
       </main>
@@ -52,14 +46,14 @@ export function LoginPage() {
   };
 
   return (
-    <AuthFrame title="Velkomen inn" lead="Logg inn for å sjå ønskelister og gåveplanar.">
+    <AuthFrame title="Logg inn">
       <form className="form" onSubmit={submit}>
-        <Field label="E-post"><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus /></Field>
+        <Field label="E-post"><input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></Field>
         <Field label="Passord"><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></Field>
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="btn primary full" disabled={busy}>{busy ? 'Loggar inn …' : 'Logg inn'}</button>
       </form>
-      <p className="auth-foot">Ny her? Be nokon i familien om invitasjonslenka. Gløymt passordet? Eigaren av appen kan lage ei ny lenke til deg.</p>
+      <p className="auth-foot">Ny her? Be familien om ei invitasjonslenke.<br />Gløymt passordet? Be administrator om ei ny passordlenke.</p>
     </AuthFrame>
   );
 }
@@ -107,13 +101,13 @@ export function JoinPage() {
   }
 
   return (
-    <AuthFrame title="Bli med i jula" lead="Lag din eigen konto. Det tek eit halvt minutt.">
+    <AuthFrame title="Opprett konto">
       <form className="form" onSubmit={submit}>
         <Field label="Namnet ditt"><input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={80} /></Field>
         <Field label="E-post"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required /></Field>
         <Field label="Vel eit passord" hint="Minst 8 teikn"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required minLength={8} /></Field>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <button className="btn primary full" disabled={busy || valid === null}>{busy ? 'Opprettar …' : 'Bli med'}</button>
+        <button className="btn primary full" disabled={busy || valid === null}>{busy ? 'Opprettar …' : 'Opprett konto'}</button>
       </form>
       <p className="auth-foot">Har du alt konto? <Link to="/login">Logg inn</Link></p>
     </AuthFrame>
@@ -143,7 +137,7 @@ export function ResetPage() {
         <Link className="btn primary full" to="/login">Logg inn</Link>
       ) : (
         <form className="form" onSubmit={submit}>
-          <Field label="Nytt passord"><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required autoFocus /></Field>
+          <Field label="Nytt passord"><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required /></Field>
           {error && <p className="form-error" role="alert">{error}</p>}
           <button className="btn primary full">Lagre passordet</button>
         </form>

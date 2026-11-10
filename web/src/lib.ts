@@ -97,6 +97,20 @@ export interface Comment extends RecordModel {
   text: string;
 }
 /** Eit bilete av ein annan person som berre eg ser. */
+/** Det eg veit om ein person. Berre eg ser det. */
+export interface PersonNote extends RecordModel {
+  user: string;
+  person: string;
+  relation: string;
+  birth_year: number;
+  gender: Person['gender'];
+  age_group: Person['age_group'];
+  interests: string;
+  sizes: string;
+}
+export const NOTE_FIELDS = ['relation', 'birth_year', 'gender', 'age_group', 'interests', 'sizes'] as const;
+export type NoteFields = Partial<Pick<PersonNote, (typeof NOTE_FIELDS)[number]>>;
+
 export interface PrivatePhoto extends RecordModel {
   user: string;
   person: string;

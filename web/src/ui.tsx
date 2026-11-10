@@ -101,6 +101,32 @@ export function Sheet({ open, onClose, title, children, footer, protect }: { ope
     return () => window.clearTimeout(t);
   }, [open, mounted]);
 
+  // På nokre mobilnettlesarar krympar berre det synlege området når tastaturet kjem opp.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const dialog = ref.current;
+    if (!open || !viewport || !dialog) return;
+    const fit = () => {
+      const bottom = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      if (viewport.scale === 1 && viewport.height < window.innerHeight - 1) {
+        dialog.style.setProperty('--visible-height', `${viewport.height}px`);
+        dialog.style.top = `${viewport.offsetTop}px`;
+        dialog.style.bottom = `${bottom}px`;
+      } else {
+        dialog.style.removeProperty('--visible-height');
+        dialog.style.top = '';
+        dialog.style.bottom = '';
+      }
+    };
+    fit();
+    viewport.addEventListener('resize', fit);
+    viewport.addEventListener('scroll', fit);
+    return () => {
+      viewport.removeEventListener('resize', fit);
+      viewport.removeEventListener('scroll', fit);
+    };
+  }, [open]);
+
   // Eit skjema med innhald skal ikkje forsvinne ved eit feiltrykk.
   const requestClose = async () => {
     if (protect && dirty.current && !(await confirm({ title: 'Forkaste det du har skrive?', action: 'Forkast', danger: true }))) {
@@ -242,11 +268,16 @@ export function PersonPicker({ label, value, onChange, exclude, single, placehol
   const [query, setQuery] = useState('');
   const pickerId = useId();
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const running = useRef(false);
+  const closePicker = () => {
+    setOpen(false);
+    trigger.current?.focus({ preventScroll: true });
+  };
   const toggle = (id: string) => {
-    if (single) { onChange(value.includes(id) ? [] : [id]); setOpen(false); }
+    if (single) { onChange(value.includes(id) ? [] : [id]); closePicker(); }
     else onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id]);
   };
 
@@ -292,16 +323,16 @@ export function PersonPicker({ label, value, onChange, exclude, single, placehol
   return (
     <div
       className="field picker" ref={root}
-      onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); } }}
+      onKeyDown={(e) => { if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); closePicker(); } }}
     >
       <span className="field-label" id={`${pickerId}-label`}>{label}</span>
       <button
-        type="button" id={pickerId} className={`picker-trigger ${open ? 'open' : ''}`} aria-haspopup="listbox" aria-expanded={open}
+        type="button" ref={trigger} id={pickerId} className={`picker-trigger ${open ? 'open' : ''}`} aria-haspopup="listbox" aria-expanded={open}
         aria-labelledby={`${pickerId}-label ${pickerId}`} onClick={() => setOpen(!open)}
       >
         {selected.length > 0 ? (
           <span className="picker-tags">
-            {selected.map((p) => <span className="picker-tag" key={p.id}><Avatar person={p} size={22} />{nameOf(p)}</span>)}
+            {selected.map((p) => <span className="picker-tag" key={p.id}><Avatar person={p} size={22} /><span className="picker-tag-name">{nameOf(p)}</span></span>)}
           </span>
         ) : <span className="picker-placeholder">{placeholder}</span>}
         <ChevronDown size={18} className="picker-chevron" />
@@ -336,7 +367,7 @@ export function PersonPicker({ label, value, onChange, exclude, single, placehol
           {clean && !exact && (
             <button type="button" className="picker-add" onMouseDown={(e) => e.preventDefault()} onClick={add}><Plus size={16} /> Legg til «{clean}»</button>
           )}
-          <button type="button" className="picker-done" onMouseDown={(e) => e.preventDefault()} onClick={() => setOpen(false)}>Ferdig</button>
+          <button type="button" className="picker-done" onMouseDown={(e) => e.preventDefault()} onClick={closePicker}>Ferdig</button>
         </div>
       )}
     </div>
@@ -380,7 +411,7 @@ export function Skeleton() {
 export function LoadError({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="page">
-      <Empty title="Fekk ikkje kontakt" action={<button className="btn primary" onClick={onRetry}>Prøv igjen</button>}>Sjekk nett­sambandet.</Empty>
+      <Empty title="Fekk ikkje kontakt" action={<button className="btn primary" onClick={onRetry}>Prøv igjen</button>}>Sjekk internettilkoplinga.</Empty>
     </div>
   );
 }

@@ -104,7 +104,7 @@ function PushPanel() {
         <p className="muted">{iPhone ? 'På iPhone må appen liggje på heimskjermen før han kan gje varsel. Trykk på Del-knappen i Safari og vel «Legg til på Hjem-skjerm», og opne appen derifrå.' : 'Denne nettlesaren støttar ikkje varsel.'}</p>
       ) : (
         <>
-          <Switch checked={!!record} onChange={(v) => void toggle(v)} label="Varsel på denne eininga" hint={loading ? 'Sjekkar …' : 'Du vel sjølv kva du vil få. Varsla seier aldri kva gåva er.'} />
+          <Switch checked={!!record} onChange={(v) => void toggle(v)} label="Varsel på denne eininga" hint={loading ? 'Sjekkar …' : 'Varsla viser ikkje kva gåva er.'} />
           {record && PUSH_KINDS.map((k) => <Switch key={k.id} checked={record[k.id]} onChange={(v) => void setKind(k.id, v)} label={k.label} hint={k.hint} />)}
         </>
       )}
@@ -122,7 +122,7 @@ function Bookmarklet() {
   return (
     <section className="panel bookmarklet">
       <h2>Legg til frå PC-en</h2>
-      <p className="muted">Dra knappen opp i bokmerkelinja. Når du er på ei produktside, trykkjer du på bokmerket, så opnar gåva seg her med alt fylt ut.</p>
+      <p className="muted">Dra knappen til bokmerkelinja. Bruk bokmerket på ei produktside for å leggje til gåva.</p>
       <a ref={link} className="btn gold" draggable onClick={(e) => { e.preventDefault(); toast('Dra knappen opp i bokmerkelinja.'); }}><Bookmark size={16} /> Legg i Pakkelapp</a>
     </section>
   );
@@ -234,7 +234,7 @@ export function SettingsPage() {
         </div>
         <form className="form" onSubmit={saveProfile}>
           <Field label="Namn"><input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} /></Field>
-          <Field label="Interesser" hint="Hjelper familien, og Nissen, med å finne gåver til deg."><textarea rows={2} value={interests} onChange={(e) => setInterests(e.target.value)} maxLength={2000} /></Field>
+          <Field label="Interesser" hint="Alle med konto ser dette. Det hjelper dei, og Nissen, med å finne gåver til deg."><textarea rows={2} value={interests} onChange={(e) => setInterests(e.target.value)} maxLength={2000} /></Field>
           <div className="row-2">
             <Field label="Storleikar"><input value={sizes} onChange={(e) => setSizes(e.target.value)} maxLength={1000} /></Field>
             <Field label="Vipps-nummer"><input inputMode="tel" value={vipps} onChange={(e) => setVipps(e.target.value)} maxLength={30} /></Field>

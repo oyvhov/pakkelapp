@@ -334,18 +334,17 @@ export function HomePage() {
         <i className="hero-glow" aria-hidden="true" />
         {data.fest ? <><Bunting /><Balloons /></> : <><div className="snow" aria-hidden="true" /><Garland /><PineBranch /><AdventCandles lit={litCandles} /></>}
         <div className="hg-text">
-          <p className="eyebrow">Hei, {firstName(data.me.name)}</p>
           {data.fest
             ? !nextEvent ? <h1>Neste feiring?</h1>
               : days > 0 ? <h1><span className="hero-num"><Count value={days} /></span> {days === 1 ? 'dag' : 'dagar'} til {nextEvent.name}</h1>
               : <h1>{nextEvent.name} er i dag!</h1>
             : days > 0 ? <h1><span className="hero-num"><Count value={days} /></span> {days === 1 ? 'dag' : 'dagar'} til julaften</h1> : <h1>God jul!</h1>}
-          {items.length > 0 ? (
+          {items.length > 0 && (
             <>
               <p className="hg-line"><strong><Count value={ready} /> av {items.length}</strong> gåver klare{others.length > 0 && !data.fest && <> · <strong><Count value={finished} /> av {others.length}</strong> fullført</>}</p>
               <p className="hg-money">Kjøpt for <Count value={Math.round(bought)} format={kr} /> av {kr(planned)}{moneyText && <> · <Link to="/oppgjer">{moneyText}</Link></>}</p>
             </>
-          ) : <p className="hg-line">{data.fest && !nextEvent ? 'Lag ei liste til bursdagen eller feiringa, så held appen styr på gåvene.' : 'Gåvene dine dukkar opp her.'}</p>}
+          )}
         </div>
         {items.length > 0 && (
           <div className="hg-bar" aria-hidden="true">
@@ -401,7 +400,7 @@ export function HomePage() {
         <section>
           <div className="section-head"><h2>Neste feiringar</h2><Link to="/lister">Alle lister <ArrowRight size={15} /></Link></div>
           {events.length === 0
-            ? <Empty title="Ingen feiringar lagt inn" action={<Link className="btn ghost" to="/lister">Lag ei liste</Link>}>Bursdag, konfirmasjon eller bryllaup: alt får plass.</Empty>
+            ? <Empty title="Ingen feiringar lagt inn" action={<Link className="btn ghost" to="/lister">Til lister</Link>} />
             : (
               <ul className="fest-list">
                 {events.slice(0, 6).map((list) => {
@@ -434,7 +433,7 @@ export function HomePage() {
           {sorting ? <SortList people={active} onClose={() => setSorting(false)} /> : rows.length === 0 ? (
             data.fest
               ? <Empty title="Ingen gåver på gang enno">Legg ei gåve i ei feiringsliste, så dukkar personen opp her.</Empty>
-              : <Empty title="Du har ikkje valt nokon enno" action={<Link className="btn ghost" to="/folk">Vel kven som skal få gåve</Link>}>Lista er berre di, og du treng ikkje ha bestemt gåvene.</Empty>
+              : <Empty title="Du har ikkje valt nokon enno" action={<Link className="btn ghost" to="/folk">Vel kven som skal få gåve</Link>}>Berre du ser kven du har valt.</Empty>
           ) : (
             <ul className="pr-list" ref={prList}>
               {rows.map((person) => <PersonRow key={person.id} person={person} open={openPerson === person.id} onToggle={() => setOpenPerson(openPerson === person.id ? '' : person.id)} />)}

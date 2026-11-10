@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowRight, ExternalLink, Loader2, Plus, Search, Send, Sparkles } from 'lucide-react';
-import { isRecipient, useData } from '../data';
+import { isRecipient, saveNote, useData } from '../data';
 import { useGifts } from '../gifts';
 import { errorText, firstName, kr, pb, type Person } from '../lib';
 import { Avatar, Empty } from '../ui';
@@ -170,8 +170,10 @@ export function NissenPage() {
     setGuiding(false);
     const lines = Object.entries(answers).map(([k, v]) => `${LABELS[k]}: ${v}`);
     void ask(`Finn gode gåveidear${person ? ` til ${first}` : ''}.${lines.length ? `\n${lines.join('\n')}` : ''}`);
-    if (person && Object.keys(save).length && (!person.user || person.user === data.me.id || person.created_by === data.me.id)) {
-      void pb.collection('people').update(person.id, save).then(() => data.reload('people')).catch(() => undefined);
+    // Svara blir lagra i mitt private notat om personen. Ingen andre ser dei.
+    if (person && Object.keys(save).length && person.user !== data.me.id) {
+      const { relation, gender, age_group, interests } = save;
+      void saveNote(data, person.id, { relation, gender, age_group, interests }).catch(() => undefined);
     }
   };
 
@@ -188,7 +190,7 @@ export function NissenPage() {
     return (
       <div className="page">
         <header className="page-head"><h1>Nissen</h1></header>
-        <Empty title="Nissen er ikkje på jobb enno">Han vaknar når administrator har lagt inn OpenAI-nøkkelen og slått han på.</Empty>
+        <Empty title="Gåveforslag er slått av">Administrator kan slå på Nissen under Innstillingar.</Empty>
       </div>
     );
   }
@@ -197,7 +199,7 @@ export function NissenPage() {
   return (
     <div className="page nisse">
       <header className="page-head">
-        <div><h1>Nissen</h1><p className="muted">Finn gåva saman med han</p></div>
+        <h1>Nissen</h1>
       </header>
 
       <div className="person-select" role="group" aria-label="Kven er gåva til?">
@@ -214,7 +216,7 @@ export function NissenPage() {
         {!showGuide && messages.length === 0 && !busy && (
           <div className="chat-intro">
             <Sparkles size={26} />
-            <p>{person ? `Kva leitar du etter til ${first}?` : 'Spør i veg.'}</p>
+            <p>{person ? `Kva leitar du etter til ${first}?` : 'Kven leitar du etter gåve til?'}</p>
           </div>
         )}
         {messages.map((m) => (
@@ -254,7 +256,7 @@ export function NissenPage() {
 
       {!showGuide && (
         <form className="chat-input" onSubmit={(e: FormEvent) => { e.preventDefault(); void ask(text); }}>
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder={messages.length ? 'Meir av dette, eller noko anna?' : 'Spør Nissen …'} aria-label="Melding til Nissen" maxLength={4000} />
+          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Skriv ei melding" aria-label="Melding til Nissen" maxLength={4000} />
           <button className="icon-btn primary" aria-label="Send" disabled={busy || !text.trim()}><Send size={19} /></button>
         </form>
       )}

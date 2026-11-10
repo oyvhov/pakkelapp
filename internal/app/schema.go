@@ -104,12 +104,21 @@ func ensureSchema(app core.App) error {
 	}
 
 	people, err := upsert(app, "people", func(c *core.Collection) {
-		c.ListRule = rule(authed)
-		c.ViewRule = rule(authed)
+		// Alle med konto kan finne kvarandre. Personar utan konto ser berre den som la dei inn,
+		// og dei som alt har valt personen som mottakar.
+		seePerson := all(authed, fmt.Sprintf(`(user != "" || created_by = %[1]s || recipients_via_person.user ?= %[1]s)`, me))
+		c.ListRule = rule(seePerson)
+		c.ViewRule = rule(seePerson)
 		// Kven som ber kostnadene, kan berre endrast gjennom ruta som krev samtykke.
 		guarded := []string{"@request.body.user:isset = false", "@request.body.covered_by:isset = false", "@request.body.covered_request:isset = false", "@request.body.covered_request_by:isset = false"}
-		c.CreateRule = rule(all(append([]string{authed, "@request.body.created_by = " + me}, guarded...)...))
-		c.UpdateRule = rule(all(append([]string{authed, fmt.Sprintf(`(user = "" || user = %[1]s || created_by = %[1]s)`, me), "@request.body.created_by:isset = false"}, guarded...)...))
+		// Detaljar og bilete av andre ligg i person_notes og photos, der berre den som skreiv dei ser dei.
+		// På sjølve personen kan berre personen sjølv skrive slikt, og det ser alle med konto.
+		unset := make([]string, 0, len(personDetails))
+		for _, f := range personDetails {
+			unset = append(unset, "@request.body."+f+":isset = false")
+		}
+		c.CreateRule = rule(all(append(append([]string{authed, "@request.body.created_by = " + me}, guarded...), unset...)...))
+		c.UpdateRule = rule(all(append([]string{authed, fmt.Sprintf(`(user = %[1]s || created_by = %[1]s)`, me), fmt.Sprintf("(user = %s || %s)", me, all(unset...)), "@request.body.created_by:isset = false"}, guarded...)...))
 		c.DeleteRule = rule(all(authed, `user = ""`, "created_by = "+me))
 		c.Fields.Add(
 			&core.TextField{Name: "name", Required: true, Max: 80},
@@ -341,7 +350,8 @@ func ensureSchema(app core.App) error {
 		mine := all(authed, "user = "+me)
 		c.ListRule = rule(mine)
 		c.ViewRule = rule(mine)
-		c.CreateRule = rule(all(authed, "@request.body.user = "+me))
+		// Ein kan berre velje personar ein alt kan sjå, så ingen får tilgang ved å gjette ein id.
+		c.CreateRule = rule(all(authed, "@request.body.user = "+me, fmt.Sprintf(`(@request.body.person.user != "" || @request.body.person.created_by = %[1]s || @request.body.person.recipients_via_person.user ?= %[1]s)`, me)))
 		c.UpdateRule = rule(all(mine, "@request.body.user:isset = false", "@request.body.person:isset = false", "@request.body.year:isset = false"))
 		c.DeleteRule = rule(mine)
 		c.Fields.Add(
@@ -372,6 +382,30 @@ func ensureSchema(app core.App) error {
 			&core.FileField{Name: "image", MaxSelect: 1, MaxSize: 8 << 20, MimeTypes: imageTypes, Thumbs: []string{"160x160"}, Protected: true, Required: true},
 		)
 		c.AddIndex("idx_photos_unique", true, "user, person", "")
+	})
+	if err != nil {
+		return err
+	}
+
+	// Det kvar brukar veit om ein person: relasjon, alder, interesser og storleikar. Berre forfattaren ser det.
+	_, err = upsert(app, "person_notes", func(c *core.Collection) {
+		mine := all(authed, "user = "+me)
+		c.ListRule = rule(mine)
+		c.ViewRule = rule(mine)
+		c.CreateRule = rule(all(authed, "@request.body.user = "+me))
+		c.UpdateRule = rule(all(mine, "@request.body.user:isset = false", "@request.body.person:isset = false"))
+		c.DeleteRule = rule(mine)
+		c.Fields.Add(
+			&core.RelationField{Name: "user", CollectionId: users.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+			&core.RelationField{Name: "person", CollectionId: people.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+			&core.TextField{Name: "relation", Max: 80},
+			&core.NumberField{Name: "birth_year", OnlyInt: true, Min: floatPtr(1900), Max: floatPtr(2100)},
+			&core.TextField{Name: "interests", Max: 2000},
+			&core.TextField{Name: "sizes", Max: 1000},
+			&core.SelectField{Name: "gender", MaxSelect: 1, Values: []string{"female", "male", "other"}},
+			&core.SelectField{Name: "age_group", MaxSelect: 1, Values: []string{"child", "teen", "adult", "elder"}},
+		)
+		c.AddIndex("idx_person_notes_unique", true, "user, person", "")
 	})
 	if err != nil {
 		return err

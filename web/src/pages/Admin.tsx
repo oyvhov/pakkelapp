@@ -67,7 +67,7 @@ export function AdminPage() {
       <Link className="back" to="/meg"><ArrowLeft size={18} /> Innstillingar</Link>
       <header className="page-head"><h1>Administrasjon</h1></header>
 
-      <p className="privacy-note"><EyeOff size={18} /><span>Administrator styrer drifta, men får ikkje sjå meir av innhaldet enn andre. Ønske, kjøp og lister kan ikkje opnast herifrå.</span></p>
+      <p className="privacy-note"><EyeOff size={18} /><span>Administrator har same innsyn i ønske, kjøp og lister som andre medlemer.</span></p>
 
       <section className="panel">
         <h2>Familien</h2>

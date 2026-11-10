@@ -85,7 +85,7 @@ export function ThanksPage() {
       </header>
 
       {sorted.length === 0
-        ? <Empty title="Ingenting her enno">Fekk du noko som ikkje var registrert i appen? Legg det til her.</Empty>
+        ? <Empty title="Ingenting her enno">Du kan leggje til gåver som manglar.</Empty>
         : (
           <ul className="thanks">
             {sorted.map((item) => (

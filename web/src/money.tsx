@@ -144,7 +144,7 @@ function ExpenseForm({ draft, onClose, onBusy }: { draft: ExpenseDraft; onClose:
       <Segmented label="Type" value={kind} onChange={setKind} options={[{ id: 'expense', label: 'Utlegg' }, { id: 'refund', label: 'Pengar tilbake' }]} />
       {kind === 'refund' && <p className="field-hint">Bruk dette når noko er returnert eller blei billegare. Den som fekk pengane, skal gje dei vidare til dei som delte.</p>}
 
-      {gift ? <p className="linked-gift">{gift.title}</p> : !giftId && <Field label="Kva gjeld det?"><input value={title} onChange={(ev) => setTitle(ev.target.value)} maxLength={200} placeholder="Gåvepapir, frakt, middag …" autoFocus={!e} /></Field>}
+      {gift ? <p className="linked-gift">{gift.title}</p> : !giftId && <Field label="Kva gjeld det?"><input value={title} onChange={(ev) => setTitle(ev.target.value)} maxLength={200} placeholder="Gåvepapir, frakt, middag …" data-initial-focus={!e} /></Field>}
 
       <Field label="Beløp">
         <input className="amount-input" inputMode="decimal" value={amount} onChange={(ev) => setAmount(ev.target.value)} placeholder="0 kr" />

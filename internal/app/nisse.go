@@ -539,6 +539,14 @@ func buildContext(e *core.RequestEvent, personID string, budget float64) string 
 	if err != nil {
 		return b.String()
 	}
+	// Det brukaren sjølv har skrive om personen går føre det personen har skrive om seg sjølv.
+	if note, err := e.App.FindFirstRecordByFilter("person_notes", "user = {:u} && person = {:p}", dbx.Params{"u": e.Auth.Id, "p": personID}); err == nil {
+		for _, f := range noteFields {
+			if v := note.Get(f); v != nil && v != "" && v != float64(0) {
+				person.Set(f, v)
+			}
+		}
+	}
 	fmt.Fprintf(&b, "\nGåva er til: %s", person.GetString("name"))
 	if r := person.GetString("relation"); r != "" {
 		fmt.Fprintf(&b, " (%s)", r)

@@ -45,7 +45,7 @@ export function SharedPage({ token }: { token: string }) {
     try {
       const res = await pb.send<{ claimToken: string }>(`/api/jul/shared/${encodeURIComponent(token)}/claim`, { method: 'POST', body: { giftId, name: who } });
       remember({ ...mine, [giftId]: res.claimToken });
-      toast('Fint! Den er din.');
+      toast('Ønsket er reservert');
     } catch (err) {
       toast(errorText(err, 'Kunne ikkje reservere ønsket.'));
     } finally {
@@ -97,7 +97,7 @@ export function SharedPage({ token }: { token: string }) {
         {brand}
         <p className="eyebrow">{list.name}</p>
         <h1>Ønska til {list.person}</h1>
-        <p className="shared-lead">{list.own ? 'Slik ser lista ut for dei du deler ho med. Du ser ikkje kva som er teke.' : `Trykk «Eg tek denne» på det du vil gje, så slepp andre å kjøpe det same. ${list.person} ser ikkje kven som har teke kva.`}</p>
+        <p className="shared-lead">{list.own ? 'Reservasjonar er skjulte for deg.' : `Vel «Eg tek denne» for å reservere. ${list.person} ser ikkje reservasjonen.`}</p>
       </header>
 
       {gifts.length === 0 ? <Empty title="Lista er tom enno" /> : (
@@ -132,10 +132,10 @@ export function SharedPage({ token }: { token: string }) {
         </ul>
       )}
 
-      <Sheet open={!!asking} onClose={() => setAsking('')} title="Kven er du?">
+      <Sheet open={!!asking} onClose={() => setAsking('')} title="Reserver ønsket">
         <form className="form" onSubmit={submitName}>
           <Field label="Namnet ditt" hint="Slik at familien veit kven som har teke ønsket.">
-            <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} autoFocus autoComplete="name" />
+            <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={60} data-initial-focus="true" autoComplete="name" />
           </Field>
           <div className="form-actions"><button className="btn primary">Eg tek denne</button></div>
         </form>

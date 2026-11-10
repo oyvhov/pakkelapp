@@ -258,7 +258,7 @@ function GiftEditor({ open, draft, gift, onClose }: { open: boolean; draft: Draf
   const [busy, setBusy] = useState(false);
   return (
     <Sheet
-      open={open} onClose={onClose} protect title={gift ? 'Endre gåve' : 'Ny gåve'}
+      open={open} onClose={onClose} protect title={gift ? 'Endre gåve' : draft.listId && draft.kind === 'wishes' ? 'Nytt ønske' : 'Ny gåve'}
       footer={<button className="btn primary full" type="submit" form="gift-form" disabled={busy}>{busy ? 'Lagrar …' : gift ? 'Lagre' : 'Legg til'}</button>}
     >
       {open && <EditorForm key={gift?.id ?? 'ny'} draft={draft} gift={gift} onClose={onClose} onBusy={setBusy} />}
@@ -335,8 +335,8 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
           setImage(new File([blob], `produkt.${blob.type.split('/')[1] || 'jpg'}`, { type: blob.type }), true);
         }
       }
-      if (!p.title) toast('Fann ikkje produktet. Skriv namnet sjølv, så er du i mål.');
-      else if (!p.price) toast('Fann namnet, men ikkje prisen. Sjekk gjerne hos butikken.');
+      if (!p.title) toast('Fann ikkje produktet. Skriv namnet på gåva.');
+      else if (!p.price) toast('Fann namnet, men ikkje prisen.');
     } catch (err) {
       if (run === previewRun.current) toast(errorText(err, 'Kunne ikkje lese lenka.'));
     } finally {
@@ -481,10 +481,10 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
         {imageUrl && <button type="button" className="image-remove" aria-label="Fjern bilete" onClick={() => { setFile(null); setImageUrl(''); setRemoveImage(true); hasImage.current = false; imageFromShop.current = false; }}><X size={14} /></button>}
         <input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) setImage(f); e.target.value = ''; }} />
         <div className="editor-fields">
-          <Field label={url ? 'Namn' : 'Lim inn lenke, eller skriv kva det er'}>
+          <Field label={url ? 'Namn' : 'Namn eller lenke'}>
             <span className="input-icon">
               {fetching ? <Loader2 size={18} className="spin" /> : <Link2 size={18} />}
-              <input value={title} onChange={(e) => onMagic(e.target.value)} onBlur={() => { if (isHttpUrl(title.trim())) acceptUrl(title); }} placeholder={fetching ? 'Hentar frå butikken …' : 'https:// eller «ullsokkar»'} autoFocus={!gift && !draft.title && !draft.url} maxLength={2000} />
+              <input value={title} onChange={(e) => onMagic(e.target.value)} onBlur={() => { if (isHttpUrl(title.trim())) acceptUrl(title); }} placeholder={fetching ? 'Hentar frå butikken …' : url ? 'Namn på gåva' : 'T.d. ullsokkar'} data-initial-focus={!gift && !draft.title && !draft.url} maxLength={2000} />
             </span>
           </Field>
           <Field label="Pris" hint={currency ? `Butikken viser ${currency}. Skriv inn beløpet i kroner.` : undefined}>
@@ -526,8 +526,8 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
 
       {kind === 'plan' ? (
         <>
-          <PersonPicker label="Til" value={recipients} onChange={setRecipients} placeholder="Vel kven gåva er til" />
-          <PersonPicker label="Frå" value={givers} onChange={setGivers} placeholder="Vel kven gåva er frå" />
+          <PersonPicker label="Til" value={recipients} onChange={setRecipients} placeholder="Vel mottakar" />
+          <PersonPicker label="Frå" value={givers} onChange={setGivers} placeholder="Vel gjevar" />
         </>
       ) : (
         <div className="field">

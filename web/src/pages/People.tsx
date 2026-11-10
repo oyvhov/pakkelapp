@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Camera, Check, ChevronRight, Eye, Gift, Lock, Pencil, Plus, Sparkles } from 'lucide-react';
-import { audienceOf, giftsFor, myWishLists, isDone, isMarked, isRecipient, markSeen, myGifts, myMark, newLabel, newWishCount, setBudget, setDone, setRecipient, useData, useSeen } from '../data';
+import { audienceOf, giftsFor, saveNote, myWishLists, isDone, isMarked, isRecipient, markSeen, myGifts, myMark, newLabel, newWishCount, setBudget, setDone, setRecipient, useData, useSeen } from '../data';
 import { useCrop } from '../crop';
 import { GiftView, useGifts, ViewToggle } from '../gifts';
 import { badAmount, COLORS, errorText, firstName, haptic, kr, parseAmount, pb, shrinkImage, type Person } from '../lib';
@@ -41,6 +41,8 @@ export function PersonForm({ person, onDone }: { person?: Person; onDone: (p?: P
     ? data.people.filter((p) => p.id === data.myPerson?.id || p.id === startCovered)
     : person?.user === data.me.id ? data.people.filter((p) => p.user && p.id !== person.id) : [];
   const isSelf = !!person && person.user === data.me.id;
+  // Namn, farge og Vipps er felles. Det andre om andre enn meg sjølv, ser berre eg.
+  const canEditShared = !person || isSelf || person.created_by === data.me.id;
   const locked = !!person && myGifts(data, person.id).count > 0;
   const [gets, setGets] = useState(person ? isRecipient(data, person.id) : true);
 
@@ -50,15 +52,26 @@ export function PersonForm({ person, onDone }: { person?: Person; onDone: (p?: P
     setBusy(true);
     try {
       const ageNumber = Number(age);
-      const body = {
-        name: name.trim(), relation: relation.trim(), gender, interests: interests.trim(), sizes: sizes.trim(), color,
-        vipps: vipps.trim(),
-        birth_year: age && ageNumber >= 0 && ageNumber < 120 ? new Date().getFullYear() - ageNumber : null,
-        ...(photo ? { avatar: await shrinkImage(photo) } : {}),
+      const details = {
+        relation: relation.trim(), gender, interests: interests.trim(), sizes: sizes.trim(),
+        birth_year: age && ageNumber >= 0 && ageNumber < 120 ? new Date().getFullYear() - ageNumber : 0,
       };
-      const saved = person
-        ? await pb.collection('people').update<Person>(person.id, body)
-        : await pb.collection('people').create<Person>({ ...body, created_by: data.me.id });
+      const shared = { name: name.trim(), color, vipps: vipps.trim() };
+      const image = photo ? await shrinkImage(photo) : undefined;
+      let saved = person as Person;
+      if (isSelf) saved = await pb.collection('people').update<Person>(person.id, { ...shared, interests: details.interests, sizes: details.sizes, gender: details.gender, birth_year: details.birth_year || null, ...(image ? { avatar: image } : {}) });
+      else if (!person) saved = await pb.collection('people').create<Person>({ ...shared, created_by: data.me.id });
+      else if (canEditShared) saved = await pb.collection('people').update<Person>(person.id, shared);
+      if (!isSelf) {
+        const changed = !person || (Object.keys(details) as (keyof typeof details)[]).some((k) => (details[k] || '') !== (person[k] || ''));
+        if (changed) await saveNote(data, saved.id, details);
+        if (image) {
+          const mine = data.photos.find((p) => p.person === saved.id);
+          if (mine) await pb.collection('photos').update(mine.id, { image });
+          else await pb.collection('photos').create({ user: data.me.id, person: saved.id, image });
+          await data.reload('photos');
+        }
+      }
       if (coveredBy !== startCovered) await pb.send('/api/jul/covered-by', { method: 'POST', body: { personId: saved.id, targetId: coveredBy } });
       await data.reload('people');
       if (!isSelf && !locked) await setRecipient(data, saved.id, gets);
@@ -94,43 +107,49 @@ export function PersonForm({ person, onDone }: { person?: Person; onDone: (p?: P
         </button>
         <input ref={photoInput} type="file" accept="image/*" hidden aria-label="Vel bilete" onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; const cut = await crop(f); if (cut) setPhoto(cut); }} />
       </div>
-      <Field label="Namn"><input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} autoFocus={!person} /></Field>
-      {!isSelf && <Switch checked={gets || locked} onChange={(v) => { if (!locked) setGets(v); }} label="Skal få gåve frå meg i år" hint={locked ? 'Du har alt ei gåve til denne personen.' : 'Lista er berre di. Du treng ikkje ha bestemt gåva.'} />}
-      <div className="row-2">
-        <Field label="Alder"><input inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} maxLength={3} placeholder="År" /></Field>
-        <Field label="Relasjon">
-          <input list="relasjonar" value={relation} onChange={(e) => setRelation(e.target.value)} placeholder="Mormor, nevø …" maxLength={80} />
-          <datalist id="relasjonar">{RELATIONS.map((r) => <option key={r} value={r} />)}</datalist>
-        </Field>
-      </div>
-      <div className="field">
-        <span className="field-label">Kjønn</span>
-        <Segmented label="Kjønn" value={gender || 'none'} onChange={(v) => setGender(v === 'none' ? '' : v as Person['gender'])} options={[{ id: 'none', label: 'Ikkje sett' }, { id: 'female', label: 'Jente/kvinne' }, { id: 'male', label: 'Gut/mann' }, { id: 'other', label: 'Anna' }]} />
-      </div>
-      <Field label="Interesser" hint="Alt her er valfritt, men Nissen gjev betre råd med det."><textarea rows={2} value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="Fjellturar, strikking, Formel 1 …" maxLength={2000} /></Field>
-      <div className="row-2">
-        <Field label="Storleikar"><input value={sizes} onChange={(e) => setSizes(e.target.value)} placeholder="M, sko 42 …" maxLength={1000} /></Field>
-        {!isSelf && <Field label="Mitt budsjett" hint="Berre du ser dette."><input inputMode="numeric" value={budget} onChange={(e) => setBudgetText(e.target.value)} placeholder="kr" /></Field>}
-      </div>
-      {coverOptions.length > 0 && (
-        <Field label="Kostnader går via" hint={person?.covered_request ? `Ventar på svar frå ${firstName(data.peopleById.get(person.covered_request)?.name)}.` : noAccount ? 'Vel deg sjølv om du betaler for denne personen, til dømes eit barn.' : 'For par og hushald. Den andre må seie ja før det gjeld.'}>
-          <select value={coveredBy} onChange={(e) => setCoveredBy(e.target.value)}>
-            <option value="">{noAccount ? 'Personen sjølv' : 'Meg sjølv'}</option>
-            {coverOptions.map((p) => <option key={p.id} value={p.id}>{p.id === data.myPerson?.id ? `Meg (${firstName(p.name)})` : p.name}</option>)}
-          </select>
-        </Field>
-      )}
-      <Field label="Vipps-nummer"><input inputMode="tel" value={vipps} onChange={(e) => setVipps(e.target.value)} maxLength={30} /></Field>
-      <div className="field">
-        <span className="field-label">Farge</span>
-        <div className="swatches">
-          {COLORS.map((c) => (
-            <button key={c} type="button" className={color === c ? 'on' : ''} style={{ background: c }} aria-label={`Farge ${c}`} aria-pressed={color === c} onClick={() => setColor(c)}>
-              {color === c && <Check size={15} color="#fff" />}
-            </button>
-          ))}
+      <Field label="Namn"><input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} disabled={!canEditShared} data-initial-focus={!person} /></Field>
+      {!isSelf && <p className="form-note"><Lock size={13} /> Bilete, alder, relasjon, kjønn, interesser og storleikar ser berre du.</p>}
+      {!isSelf && <Switch checked={gets || locked} onChange={(v) => { if (!locked) setGets(v); }} label="Skal få gåve frå meg i år" hint={locked ? 'Du har alt ei gåve til denne personen.' : 'Berre du ser kven du har valt.'} />}
+      <details className="person-details" open={!!person}>
+        <summary>Fleire opplysningar</summary>
+        <div className="form">
+          <div className="row-2">
+            <Field label="Alder"><input inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} maxLength={3} placeholder="År" /></Field>
+            <Field label="Relasjon">
+              <input list="relasjonar" value={relation} onChange={(e) => setRelation(e.target.value)} placeholder="Mormor, nevø …" maxLength={80} />
+              <datalist id="relasjonar">{RELATIONS.map((r) => <option key={r} value={r} />)}</datalist>
+            </Field>
+          </div>
+          <div className="field">
+            <span className="field-label">Kjønn</span>
+            <Segmented label="Kjønn" value={gender || 'none'} onChange={(v) => setGender(v === 'none' ? '' : v as Person['gender'])} options={[{ id: 'none', label: 'Ikkje sett' }, { id: 'female', label: 'Jente / kvinne' }, { id: 'male', label: 'Gut / mann' }, { id: 'other', label: 'Anna' }]} />
+          </div>
+          <Field label="Interesser"><textarea rows={2} value={interests} onChange={(e) => setInterests(e.target.value)} placeholder="Fjellturar, strikking, Formel 1 …" maxLength={2000} /></Field>
+          <div className="row-2">
+            <Field label="Storleikar"><input value={sizes} onChange={(e) => setSizes(e.target.value)} placeholder="M, sko 42 …" maxLength={1000} /></Field>
+            {!isSelf && <Field label="Mitt budsjett" hint="Berre du ser dette."><input inputMode="numeric" value={budget} onChange={(e) => setBudgetText(e.target.value)} placeholder="kr" /></Field>}
+          </div>
+          {canEditShared && coverOptions.length > 0 && (
+            <Field label="Kostnader går via" hint={person?.covered_request ? `Ventar på svar frå ${firstName(data.peopleById.get(person.covered_request)?.name)}.` : noAccount ? 'Vel deg sjølv om du betaler for denne personen, til dømes eit barn.' : 'For par og hushald. Den andre må seie ja før det gjeld.'}>
+              <select value={coveredBy} onChange={(e) => setCoveredBy(e.target.value)}>
+                <option value="">{noAccount ? 'Personen sjølv' : 'Meg sjølv'}</option>
+                {coverOptions.map((p) => <option key={p.id} value={p.id}>{p.id === data.myPerson?.id ? `Meg (${firstName(p.name)})` : p.name}</option>)}
+              </select>
+            </Field>
+          )}
+          {canEditShared && <Field label="Vipps-nummer"><input inputMode="tel" value={vipps} onChange={(e) => setVipps(e.target.value)} maxLength={30} /></Field>}
+          {canEditShared && <div className="field">
+            <span className="field-label">Farge</span>
+            <div className="swatches">
+              {COLORS.map((c) => (
+                <button key={c} type="button" className={color === c ? 'on' : ''} style={{ background: c }} aria-label={`Farge ${c}`} aria-pressed={color === c} onClick={() => setColor(c)}>
+                  {color === c && <Check size={15} color="#fff" />}
+                </button>
+              ))}
+            </div>
+          </div>}
         </div>
-      </div>
+      </details>
       <div className="form-actions spread">
         {person && !person.user && person.created_by === data.me.id ? <button type="button" className="btn ghost danger" onClick={() => void remove()}>Fjern</button> : <span />}
         <button className="btn primary" disabled={busy}>{person ? 'Lagre' : 'Legg til'}</button>
@@ -196,7 +215,7 @@ function WishAudience() {
           </Link>
         );
       })}
-      <p className="ps-note">Dei ser kva du ønskjer deg og kan ta eit ønske. Du ser ikkje kven som har teke eller kjøpt noko, så overraskinga held seg.</p>
+      <p className="ps-note">Du ser ikkje kven som har reservert eller kjøpt ei gåve til deg.</p>
     </section>
   );
 }
@@ -208,7 +227,7 @@ function PersonPhoto({ person, canEdit }: { person: Person; canEdit: boolean }) 
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const crop = useCrop();
-  // Kan eg ikkje endre personen og han manglar bilete, kan eg leggje inn eit som berre eg ser.
+  // Bilete eg legg inn av andre, ser berre eg. Har personen eige bilete, blir det brukt.
   const privateOnly = !canEdit;
   const mine = data.photos.find((p) => p.person === person.id);
   if (privateOnly && person.avatar) return <Avatar person={person} size={84} large />;
@@ -321,7 +340,7 @@ export function PeoplePage() {
         {chosen.length === 0 ? data.fest ? (
           <Empty title="Ingen gåver på gang">Gåver til bursdagar og andre feiringar dukkar opp her.</Empty>
         ) : (
-          <Empty title="Ingen valt enno" action={lastYear.length > 0 ? <button className="btn ghost" onClick={() => void reuse()}>Bruk same folk som i fjor</button> : undefined}>Trykk på gåveikonet ved dei som skal få noko. Lista er berre di, og du treng ikkje ha bestemt gåvene.</Empty>
+          <Empty title="Ingen valt enno" action={lastYear.length > 0 ? <button className="btn ghost" onClick={() => void reuse()}>Bruk same folk som i fjor</button> : undefined}>Trykk på gåveikonet ved den som skal få gåve. Berre du ser valet.</Empty>
         ) : (
           <div className="person-grid">{chosen.map((p) => <PersonRow key={p.id} personId={p.id} />)}</div>
         )}
@@ -332,7 +351,7 @@ export function PeoplePage() {
           <div className="person-grid">{rest.map((p) => <PersonRow key={p.id} personId={p.id} />)}</div>
         </section>
       )}
-      <Sheet open={adding} onClose={() => setAdding(false)} title="Ny person">
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Ny person" protect>
         {adding && <PersonForm onDone={() => setAdding(false)} />}
       </Sheet>
     </div>
@@ -349,7 +368,7 @@ function RecipientSwitch({ personId }: { personId: string }) {
       onChange={(on) => { if (!has) void setRecipient(data, personId, on).catch((err) => toast(errorText(err))); }}
 
       label="Skal få gåve frå meg i år"
-      hint={has ? 'Du har alt ei gåve til denne personen.' : 'Lista er berre di. Du treng ikkje ha bestemt gåva.'}
+      hint={has ? 'Du har alt ei gåve til denne personen.' : 'Berre du ser kven du har valt.'}
     />
   );
 }
@@ -448,7 +467,6 @@ export function PersonPage() {
 
   const self = person.user === data.me.id;
   const split = giftsFor(data, person.id);
-  const canEdit = !person.user || self || person.created_by === data.me.id;
   const budget = myMark(data, person.id)?.budget ?? 0;
   const age = person.birth_year ? new Date().getFullYear() - person.birth_year : 0;
   const first = firstName(person.name);
@@ -465,13 +483,13 @@ export function PersonPage() {
     <div className="page">
       <Link className="back" to={fromHome ? '/' : '/folk'} onClick={(e) => { if (fromHome) { e.preventDefault(); navigate(-1); } }}><ArrowLeft size={18} /> {fromHome ? 'Oversikt' : 'Folk'}</Link>
       <section className="person-hero">
-        <PersonPhoto person={person} canEdit={canEdit} />
+        <PersonPhoto person={person} canEdit={self} />
         <div className="person-hero-text">
           <h1>{person.name}</h1>
           <p>{[person.relation, age ? `${age} år` : '', person.sizes].filter(Boolean).join(' · ')}</p>
           {person.interests && <p className="muted">{person.interests}</p>}
         </div>
-        {canEdit && <button className="icon-btn" onClick={() => setEditing(true)} aria-label="Endre person"><Pencil size={18} /></button>}
+        {<button className="icon-btn" onClick={() => setEditing(true)} aria-label="Endre person"><Pencil size={18} /></button>}
       </section>
       {!self && (!noGifts || split.open.length > 0 || budget > 0) && <PersonSummary personId={person.id} split={split} />}
       <div className="action-row">
@@ -491,7 +509,7 @@ export function PersonPage() {
           <section>
             <div className="section-head"><h2>Ønska dine</h2>{split.wishes.length > 0 && <ViewToggle />}</div>
             {split.wishes.length === 0
-              ? <Empty title="Du har ikkje ønskt deg noko enno">Lim inn ei lenke, så er det gjort.</Empty>
+              ? <Empty title="Du har ikkje lagt til ønske enno" />
               : <GiftView gifts={split.wishes} />}
           </section>
         </>
@@ -518,7 +536,7 @@ export function PersonPage() {
         </>
       )}
 
-      <Sheet open={editing} onClose={() => setEditing(false)} title={`Endre ${person.name}`}>
+      <Sheet open={editing} onClose={() => setEditing(false)} title={`Endre ${person.name}`} protect>
         {editing && <PersonForm person={person} onDone={(p) => { setEditing(false); if (!p) navigate('/folk'); }} />}
       </Sheet>
     </div>

@@ -79,6 +79,9 @@ func Register(pb *pocketbase.PocketBase, cfg Config) {
 		if err := unshareFamilyLists(se.App); err != nil {
 			return err
 		}
+		if err := movePrivateDetails(se.App); err != nil {
+			return err
+		}
 		if err := ensureSettingsRecord(se.App, cfg.AIModel); err != nil {
 			return err
 		}

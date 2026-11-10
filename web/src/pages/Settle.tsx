@@ -242,7 +242,6 @@ export function SettlePage() {
           <p className="eyebrow">Oppgjer</p>
           {settled ? <h1 className="ledger-big">Alt er gjort opp</h1> : net >= 0 ? <h1 className="ledger-big"><span>{money(net)}</span> til gode</h1> : <h1 className="ledger-big"><span>{money(-net)}</span> å betale</h1>}
           {!settled && ledger.owe > 0 && ledger.owed > 0 && <p className="hero-sub">Du skuldar {money(ledger.owe)} og har {money(ledger.owed)} til gode.</p>}
-          {settled && <p className="hero-sub">Ingen skuldar nokon noko. Slik skal jul vere.</p>}
         </div>
         <button className="btn gold hero-action" onClick={() => addExpense()}><Plus size={18} /> Nytt utlegg</button>
       </section>
@@ -256,7 +255,7 @@ export function SettlePage() {
       {ledger.transfers.length > 0 && <section><div className="section-head"><h2>Dette må gjerast</h2></div><div className="stack-list">{ledger.transfers.map((t) => <TransferCard key={`${t.from}-${t.to}`} transfer={t} />)}</div></section>}
 
       {expenses.length === 0 && history.length === 0 ? (
-        <Empty title="Ingen utlegg enno" action={<button className="btn primary" onClick={() => addExpense()}><Plus size={18} /> Registrer det fyrste</button>}>Har nokon lagt ut for ei felles gåve? Skriv det inn, så held appen styr på resten.</Empty>
+        <Empty title="Ingen utlegg enno" />
       ) : years.map((year) => (
         <section key={year}>
           <div className="section-head"><h2>Utlegg {year}</h2></div>

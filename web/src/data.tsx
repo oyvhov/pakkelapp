@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { RecordModel } from 'pocketbase';
-import { daysUntil, firstName, fileTokenStale, isFest, isJul, isUpcoming, pb, refreshFileToken, seasonYear, type Claim, type Comment, type Expense, type Gift, type GiftList, type GuestClaim, type Ledger, type Person, type PrivatePhoto, type RecipientMark, type Settlement, type User } from './lib';
+import { daysUntil, firstName, fileTokenStale, isFest, isJul, isUpcoming, pb, refreshFileToken, seasonYear, type Claim, type Comment, type Expense, type Gift, type GiftList, type GuestClaim, type Ledger, type Person, type PersonNote, type PrivatePhoto, type NoteFields, NOTE_FIELDS, type RecipientMark, type Settlement, type User } from './lib';
 
 interface Store {
   people: Person[];
@@ -14,9 +14,10 @@ interface Store {
   settlements: Settlement[];
   recipients: RecipientMark[];
   photos: PrivatePhoto[];
+  person_notes: PersonNote[];
 }
-const EMPTY: Store = { people: [], lists: [], gifts: [], claims: [], guest_claims: [], comments: [], users: [], expenses: [], settlements: [], recipients: [], photos: [] };
-const COLLECTIONS = ['people', 'lists', 'gifts', 'claims', 'guest_claims', 'comments', 'users', 'expenses', 'settlements', 'recipients', 'photos'] as const;
+const EMPTY: Store = { people: [], lists: [], gifts: [], claims: [], guest_claims: [], comments: [], users: [], expenses: [], settlements: [], recipients: [], photos: [], person_notes: [] };
+const COLLECTIONS = ['people', 'lists', 'gifts', 'claims', 'guest_claims', 'comments', 'users', 'expenses', 'settlements', 'recipients', 'photos', 'person_notes'] as const;
 type Key = (typeof COLLECTIONS)[number];
 
 export function useAuth() {
@@ -143,7 +144,16 @@ export function DataProvider({ children, me }: { children: ReactNode; me: Record
 
   const value = useMemo<DataValue>(() => {
     const season = config.season || seasonYear();
-    const peopleById = new Map(store.people.map((p) => [p.id, p]));
+    // Det eg har skrive om ein person, går føre det personen har skrive om seg sjølv. Berre eg ser det.
+    const notes = new Map(store.person_notes.map((n) => [n.person, n]));
+    const people = store.people.map((p) => {
+      const note = p.user === me.id ? undefined : notes.get(p.id);
+      if (!note) return p;
+      const extra: Partial<Person> = {};
+      for (const f of NOTE_FIELDS) if (note[f]) (extra as Record<string, unknown>)[f] = note[f];
+      return { ...p, ...extra };
+    });
+    const peopleById = new Map(people.map((p) => [p.id, p]));
     const listsById = new Map(store.lists.map((l) => [l.id, l]));
     const usersById = new Map(store.users.map((u) => [u.id, u]));
     const listOfGift = new Map(store.gifts.map((g) => [g.id, listsById.get(g.list)]));
@@ -151,13 +161,14 @@ export function DataProvider({ children, me }: { children: ReactNode; me: Record
     const guests = store.guest_claims.map((g) => ({ ...g, user: '', status: 'reserved', amount: 0, guest_name: g.name }) as Claim);
     return {
       ...store,
+      people,
       // Ein reservasjon til jul gjeld éi jul. Andre høve skjer berre éin gong.
       claims: [...store.claims, ...guests].filter((c) => c.year === season || !isJul(listOfGift.get(c.gift))),
       allGifts,
       gifts: allGifts.filter((g) => !g.archived),
       ready, loadFailed, retry, patch, reload, hideGift, showGift, ledger, ledgerFailed, reloadLedger, config, reloadConfig,
       me: (usersById.get(me.id) ?? me) as User,
-      myPerson: store.people.find((p) => p.user === me.id),
+      myPerson: people.find((p) => p.user === me.id),
       peopleById, listsById, usersById, season, fest,
     };
     // fileTick gjer at bileta får den nye nøkkelen.
@@ -369,3 +380,11 @@ export function newWishCount(data: DataValue, state: Seen, personId: string) {
 }
 
 export const newLabel = (n: number) => `${n} ${n === 1 ? 'nytt' : 'nye'}`;
+
+/** Lagrar det eg veit om ein person i mitt private notat. Tomme felt tømmer notatet. */
+export async function saveNote(data: DataValue, personId: string, fields: NoteFields) {
+  const note = data.person_notes.find((n) => n.person === personId);
+  if (note) await pb.collection('person_notes').update(note.id, fields);
+  else await pb.collection('person_notes').create({ ...fields, user: data.me.id, person: personId });
+  await data.reload('person_notes');
+}
