@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { RecordModel } from 'pocketbase';
-import { Bell, Bookmark, ChevronRight, Copy, Download, Heart, LogOut, ShieldCheck } from 'lucide-react';
+import { Bell, Bookmark, ChevronRight, Copy, Download, LogOut, ShieldCheck } from 'lucide-react';
 import { applyTheme } from '../App';
 import { useCrop } from '../crop';
 import { useData } from '../data';
 import { errorText, pb, readSeasonTheme, setSeasonTheme, shrinkImage, type SeasonTheme } from '../lib';
-import { Avatar, Field, Segmented, Switch, useToast } from '../ui';
+import { Avatar, Field, Segmented, Sheet, Switch, useToast } from '../ui';
 
 type InstallPrompt = Event & { prompt: () => Promise<void> };
 type Theme = 'auto' | 'light' | 'dark';
@@ -147,6 +147,7 @@ export function SettingsPage() {
   const [password, setPassword] = useState('');
   const [install, setInstall] = useState<InstallPrompt | null>(readInstall);
   const avatarInput = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState(false);
   const standalone = window.matchMedia('(display-mode: standalone)').matches;
   const iPhone = /iphone|ipad/i.test(navigator.userAgent);
 
@@ -182,6 +183,7 @@ export function SettingsPage() {
       if (person) await pb.collection('people').update(person.id, { name: name.trim(), interests: interests.trim(), sizes: sizes.trim(), vipps: vipps.trim() });
       await Promise.all([data.reload('users'), data.reload('people')]);
       toast('Lagra');
+      setEditing(false);
     } catch (err) { toast(errorText(err)); }
   };
   const uploadAvatar = async (file?: File) => {
@@ -218,13 +220,17 @@ export function SettingsPage() {
     <div className="page narrow">
       <header className="page-head"><h1>Innstillingar</h1></header>
 
+      <button type="button" className="admin-link profile-link" onClick={() => setEditing(true)}>
+        <Avatar person={person} size={40} /><span><strong>{data.me.name || 'Profil'}</strong><small>Profil: namn, bilete, interesser, storleikar og Vipps</small></span><ChevronRight size={18} />
+      </button>
+
       {data.me.is_owner && (
         <Link to="/admin" className="admin-link">
           <ShieldCheck size={20} /><span><strong>Administrasjon</strong><small>Medlemer, Nissen, invitasjon og backup</small></span><ChevronRight size={18} />
         </Link>
       )}
 
-      <section className="panel">
+      <Sheet open={editing} onClose={() => setEditing(false)} title="Profil" protect>
         <div className="profile-top">
           <button type="button" className="avatar-pick" onClick={() => avatarInput.current?.click()}>
             <Avatar person={person} size={72} />
@@ -241,11 +247,7 @@ export function SettingsPage() {
           </div>
           <div className="form-actions"><button className="btn primary">Lagre</button></div>
         </form>
-      </section>
-
-      <Link to="/takk" className="admin-link">
-        <Heart size={20} /><span><strong>Takkelista</strong><small>{data.config.thanksOpen ? 'Sjå kven som gav deg kva' : 'Opnar klokka 18 på julaften'}</small></span><ChevronRight size={18} />
-      </Link>
+      </Sheet>
 
       <PushPanel />
       <Bookmarklet />

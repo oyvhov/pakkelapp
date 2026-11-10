@@ -131,8 +131,6 @@ func Register(pb *pocketbase.PocketBase, cfg Config) {
 		private.POST("/gifts/{id}/share", s.shareGift)
 		private.POST("/lists/{id}/share", s.setShare)
 		private.GET("/push/key", s.pushKey)
-		private.GET("/received", s.received)
-		private.POST("/received/archive", s.archiveReceived)
 
 		admin := se.Router.Group("/api/jul/admin")
 		admin.Bind(apis.RequireAuth("users"))

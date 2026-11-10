@@ -1268,3 +1268,29 @@ body::after { content: ''; position: fixed; inset: -25%; z-index: -2; pointer-ev
 
 .who-row .btn.who-edit { color: inherit; gap: 5px; font-weight: 600; }
 .who-row .btn.primary.who-edit { color: var(--berry-ink); }
+
+/* Snarvegen til Nissen kan lukkast. */
+.nisse-bar-wrap { position: relative; }
+.nisse-bar-wrap .nisse-bar { padding-right: 52px; }
+.nisse-bar-close { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); }
+
+/* Feltet for å leggje til ei gåve skal vere lett å sjå. */
+.quick-add.big { align-items: center; padding: 9px 9px 9px 14px; border-radius: 18px; box-shadow: 0 0 0 1.5px var(--gold-soft), var(--shadow); }
+.quick-add.big input { font-size: 17px; min-height: 48px; }
+.quick-add.big .icon-btn { width: 48px; height: 48px; }
+.quick-add-icon { flex: none; color: var(--gold-ink); }
+
+/* Kortet om kven som manglar gåve: hovudtekst øvst, namn under. */
+.next-text small { display: block; color: var(--ink-2); font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Profilen er ei rad som Administrasjon, og opnar seg i eit ark. */
+.profile-link { width: 100%; text-align: left; font: inherit; border: 0; cursor: pointer; }
+.profile-link .avatar { box-shadow: 0 0 0 2px var(--on-pine-2); }
+
+/* Spør om å leggje appen på heimskjermen. Ligg over menyen nedst på mobil. */
+.install-nudge { position: fixed; z-index: 60; left: 12px; right: 12px; bottom: calc(88px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 12px; padding: 12px 10px 12px 14px; border-radius: 18px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 40px rgba(0,0,0,.22), var(--shadow); animation: next-in .5s var(--spring) both; }
+.install-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.install-text small { color: var(--ink-2); font-size: 13.5px; }
+.install-text small svg { vertical-align: -2px; }
+.install-actions { flex: none; display: flex; align-items: center; gap: 4px; }
+@media (min-width: 900px) { .install-nudge { left: auto; right: 24px; bottom: 24px; width: 380px; } }

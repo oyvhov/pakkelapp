@@ -253,7 +253,14 @@ function PersonRow({ person, open, onToggle }: { person: Person; open: boolean; 
 export function HomePage() {
   const data = useData();
   const { addGift } = useGifts();
+  const toast = useToast();
   const [quick, setQuick] = useState('');
+  const [hideNisse, setHideNisse] = useState(() => { try { return localStorage.getItem('hide-nisse-bar') === '1'; } catch { return false; } });
+  const closeNisse = () => {
+    setHideNisse(true);
+    try { localStorage.setItem('hide-nisse-bar', '1'); } catch { /* */ }
+    toast('Nissen er fjerna frå oversikta. Du finn han framleis øvst.', { label: 'Angre', onClick: () => { setHideNisse(false); try { localStorage.removeItem('hide-nisse-bar'); } catch { /* */ } } });
+  };
   const [stage, setStage] = useState<Status | ''>('');
   const [showAll, setShowAll] = useState(false);
   const [openPerson, setOpenPerson] = useState('');
@@ -317,8 +324,15 @@ export function HomePage() {
   if (items.length === 0) next = null;
   else if (rows.length > 0 && active.length === 0) next = { key: 'done', icon: <PartyPopper size={18} />, text: <><strong>Alle er fullført.</strong> No kan jula berre kome.</> };
   else if (pendingIn > 0) next = { key: 'pay', icon: <Wallet size={18} />, text: <><strong>{pendingIn} betaling{pendingIn > 1 ? 'ar' : ''}</strong> skal stadfestast av deg</>, action: <Link className="next-go" to="/oppgjer">Sjå <ArrowRight size={15} /></Link> };
-  else if (empty.length > 0) next = { key: `empty-${empty[0].id}`, icon: <GiftIcon size={18} />, text: <><strong>Ingenting til {firstName(empty[0].name)}</strong>{empty.length > 1 ? ` og ${empty.length - 1} til` : ''} enno</>, action: <button type="button" className="next-go" onClick={() => addGift({ kind: 'plan', recipients: [empty[0].id] })}>Finn gåve <ArrowRight size={15} /></button> };
-  else if (toBuy.length > 0 && days <= 14) next = { key: 'buy', icon: <ShoppingBag size={18} />, text: <><strong>{toBuy.length} {toBuy.length === 1 ? 'gåve' : 'gåver'}</strong> står att å kjøpe</>, action: <button type="button" className="next-go" onClick={() => setStage('idea')}>Vis <ArrowRight size={15} /></button> };
+  else if (empty.length > 0) {
+    const firsts = empty.map((p) => firstName(p.name));
+    const list = firsts.length > 1 ? `${firsts.slice(0, -1).join(', ')} og ${firsts[firsts.length - 1]}` : firsts[0];
+    // Mange: talet øvst og namna under. Få: namnet øvst.
+    const text = empty.length > 2
+      ? <><strong>Gåver til {empty.length} manglar</strong><small>{list}</small></>
+      : <><strong>{list} manglar gåve</strong><small>Ingenting planlagt enno</small></>;
+    next = { key: `empty-${empty[0].id}`, icon: <GiftIcon size={18} />, text, action: <button type="button" className="next-go" onClick={() => addGift({ kind: 'plan', recipients: [empty[0].id] })}>Finn gåve <ArrowRight size={15} /></button> };
+  } else if (toBuy.length > 0 && days <= 14) next = { key: 'buy', icon: <ShoppingBag size={18} />, text: <><strong>{toBuy.length} {toBuy.length === 1 ? 'gåve' : 'gåver'}</strong> står att å kjøpe</>, action: <button type="button" className="next-go" onClick={() => setStage('idea')}>Vis <ArrowRight size={15} /></button> };
   else if (wrapLeft > 0 && days <= 10) next = { key: 'wrap', icon: <GiftIcon size={18} />, text: <><strong>{wrapLeft} {wrapLeft === 1 ? 'gåve' : 'gåver'}</strong> ventar på papir og band</>, action: <button type="button" className="next-go" onClick={() => setStage('bought')}>Vis <ArrowRight size={15} /></button> };
 
   const submitQuick = (e: FormEvent) => {
@@ -353,7 +367,7 @@ export function HomePage() {
         )}
         {items.length > 0 && (
           <div className="hg-stages" role="group" aria-label="Vis gåver etter status">
-            {STATUSES.map((s) => (
+            {STATUSES.filter((s) => s.id === 'idea' || s.id === 'bought').map((s) => (
               <button key={s.id} type="button" className={`hg-stage st-${s.id} ${stage === s.id ? 'on' : ''}`} aria-pressed={stage === s.id} onClick={() => setStage(stage === s.id ? '' : s.id)}>
                 <i aria-hidden="true" /><span><Count value={countOf(s.id)} /> {s.label}</span>
               </button>
@@ -366,25 +380,21 @@ export function HomePage() {
 
       {showReset && <p className="note-bar">Administrator laga ei lenke for nytt passord til kontoen din {dateFormat.format(resetAt!)}. Bad du ikkje om det, så snakk med dei andre i familien.</p>}
 
-      {data.config.thanksOpen && (
-        <Link className="thanks-bar" to="/takk">
-          <Heart size={18} />
-          <span><strong>Kven gav deg kva?</strong><small>Takkelista di er open.</small></span>
-          <ArrowRight size={17} />
-        </Link>
-      )}
-
-      <form className="quick-add" onSubmit={submitQuick}>
+      <form className="quick-add big" onSubmit={submitQuick}>
+        <GiftIcon size={22} className="quick-add-icon" aria-hidden="true" />
         <input value={quick} onChange={(e) => setQuick(e.target.value)} placeholder="Lim inn ei lenke, eller skriv ei gåve" aria-label="Legg til ei gåve" />
-        <button className="icon-btn primary" aria-label="Legg til"><Plus size={20} /></button>
+        <button className="icon-btn primary" aria-label="Legg til"><Plus size={22} /></button>
       </form>
 
-      {data.config.aiEnabled && (
-        <Link className="thanks-bar nisse-bar" to="/nissen">
-          <Sparkles size={18} />
-          <span><strong>Treng du idear?</strong><small>Spør Nissen om gåver til dei du skal gje til.</small></span>
-          <ArrowRight size={17} />
-        </Link>
+      {data.config.aiEnabled && !hideNisse && (
+        <div className="nisse-bar-wrap">
+          <Link className="thanks-bar nisse-bar" to="/nissen">
+            <Sparkles size={18} />
+            <span><strong>Treng du idear?</strong><small>Spør Nissen om gåver til dei du skal gje til.</small></span>
+            <ArrowRight size={17} />
+          </Link>
+          <button type="button" className="icon-btn nisse-bar-close" aria-label="Fjern Nissen frå oversikta" onClick={closeNisse}><X size={17} /></button>
+        </div>
       )}
 
       {next && (

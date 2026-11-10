@@ -31,7 +31,6 @@ export interface AppConfig {
   aiEnabled: boolean;
   simplify: boolean;
   autoPrice: boolean;
-  thanksOpen?: boolean;
   season?: number;
 }
 

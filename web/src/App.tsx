@@ -12,11 +12,11 @@ import { HomePage } from './pages/Home';
 import { PeoplePage, PersonPage } from './pages/People';
 import { ListPage, ListsPage } from './pages/Lists';
 import { NissenPage } from './pages/Nissen';
+import { InstallNudge } from './install';
 import { SettlePage } from './pages/Settle';
 import { SettingsPage } from './pages/Settings';
 import { AdminPage } from './pages/Admin';
 import { SharedPage } from './pages/Shared';
-import { ThanksPage } from './pages/Thanks';
 
 export function applyTheme(theme: string) {
   if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
@@ -146,6 +146,7 @@ function Shell({ children }: { children: ReactNode }) {
           <NavLink key={to} to={to}><span className="tab-icon"><Icon size={22} />{to === '/oppgjer' && pending > 0 && <b className="dot" />}</span><span>{label}</span></NavLink>
         ))}
       </nav>
+      <InstallNudge />
     </div>
   );
 }
@@ -187,7 +188,6 @@ export function App() {
                         <Route path="/nissen" element={<NissenPage />} />
                         <Route path="/meg" element={<SettingsPage />} />
                         <Route path="/admin" element={<AdminPage />} />
-                        <Route path="/takk" element={<ThanksPage />} />
                         <Route path="/del" element={<ShareTarget />} />
                         <Route path="/login" element={<AfterLogin />} />
                         <Route path="*" element={<Navigate to="/" replace />} />

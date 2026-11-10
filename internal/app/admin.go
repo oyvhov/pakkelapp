@@ -82,7 +82,6 @@ func (s *server) config(e *core.RequestEvent) error {
 		"aiEnabled":  s.ai.hasKey() && cfg.AIEnabled,
 		"simplify":   cfg.Simplify,
 		"autoPrice":  s.ai.hasKey() && cfg.AIEnabled && !cfg.NoAutoPrice,
-		"thanksOpen": revealYear(s.now()) != 0,
 		"season":     seasonYear(s.now()),
 	})
 }
