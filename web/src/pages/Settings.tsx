@@ -221,7 +221,7 @@ export function SettingsPage() {
       <header className="page-head"><h1>Innstillingar</h1></header>
 
       <button type="button" className="admin-link profile-link" onClick={() => setEditing(true)}>
-        <Avatar person={person} size={40} /><span><strong>{data.me.name || 'Profil'}</strong><small>Profil: namn, bilete, interesser, storleikar og Vipps</small></span><ChevronRight size={18} />
+        <Avatar person={person} size={40} /><span><strong>{data.me.name || 'Profil'}</strong><small>Profil, bilete og storleikar</small></span><ChevronRight size={18} />
       </button>
 
       {data.me.is_owner && (

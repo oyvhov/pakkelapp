@@ -1285,7 +1285,8 @@ body::after { content: ''; position: fixed; inset: -25%; z-index: -2; pointer-ev
 
 /* Profilen er ei rad som Administrasjon, og opnar seg i eit ark. */
 .profile-link { width: 100%; text-align: left; font: inherit; border: 0; cursor: pointer; }
-.profile-link .avatar { box-shadow: 0 0 0 2px var(--on-pine-2); }
+/* Biletet skal ikkje arve stilen til teksten i rada. */
+.admin-link > .avatar { display: inline-grid; flex: 0 0 auto; box-shadow: 0 0 0 2px var(--on-pine-2); }
 
 /* Spør om å leggje appen på heimskjermen. Ligg over menyen nedst på mobil. */
 .install-nudge { position: fixed; z-index: 60; left: 12px; right: 12px; bottom: calc(88px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 12px; padding: 12px 10px 12px 14px; border-radius: 18px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 40px rgba(0,0,0,.22), var(--shadow); animation: next-in .5s var(--spring) both; }
