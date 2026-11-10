@@ -1,0 +1,31 @@
+name: pakkelapp
+
+services:
+  pakkelapp:
+    build: .
+    image: pakkelapp:local
+    container_name: pakkelapp
+    restart: unless-stopped
+    # Bak ein omvendt proxy eller Cloudflare Tunnel: peik domenet ditt til http://localhost:8430
+    ports:
+      - "${JUL_BIND_IP:-127.0.0.1}:8430:8080"
+    environment:
+      JUL_PUBLIC_URL: ${JUL_PUBLIC_URL:-http://localhost:8430}
+      JUL_INVITE_CODE: ${JUL_INVITE_CODE:-}
+      JUL_ENABLE_ADMIN: ${JUL_ENABLE_ADMIN:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6.1-sol}
+    volumes:
+      - pakkelapp-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    stop_grace_period: 30s
+
+volumes:
+  pakkelapp-data:
+    name: ${JUL_DATA_VOLUME:-pakkelapp-data}
