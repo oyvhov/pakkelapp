@@ -209,20 +209,8 @@ func (s *server) inviteInfo(e *core.RequestEvent) error {
 	if !s.validInvite(e.Request.PathValue("code")) || !s.settings(e.App).SignupOpen {
 		return e.ForbiddenError("Invitasjonen er ikkje gyldig.", nil)
 	}
-	people, err := e.App.FindRecordsByFilter("people", `user = ""`, "name", 200, 0)
-	if err != nil {
-		return e.InternalServerError("", err)
-	}
-	type row struct {
-		ID       string `json:"id"`
-		Name     string `json:"name"`
-		Relation string `json:"relation"`
-	}
-	out := make([]row, 0, len(people))
-	for _, p := range people {
-		out = append(out, row{p.Id, p.GetString("name"), p.GetString("relation")})
-	}
-	return e.JSON(http.StatusOK, map[string]any{"people": out})
+	// Namn i familien blir ikkje viste til den som berre har lenka.
+	return e.JSON(http.StatusOK, map[string]any{"people": []any{}})
 }
 
 func seasonYear(now time.Time) int {

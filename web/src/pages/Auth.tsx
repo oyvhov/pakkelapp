@@ -68,9 +68,7 @@ export function JoinPage() {
   const { code = '' } = useParams();
   const navigate = useNavigate();
   const auth = useAuth();
-  const [people, setPeople] = useState<{ id: string; name: string; relation: string }[]>([]);
   const [valid, setValid] = useState<boolean | null>(null);
-  const [personId, setPersonId] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -78,8 +76,8 @@ export function JoinPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    pb.send<{ people: typeof people }>(`/api/jul/invite/${encodeURIComponent(code)}`, {})
-      .then((r) => { setPeople(r.people); setValid(true); })
+    pb.send(`/api/jul/invite/${encodeURIComponent(code)}`, {})
+      .then(() => setValid(true))
       .catch(() => setValid(false));
   }, [code]);
 
@@ -90,7 +88,7 @@ export function JoinPage() {
     setBusy(true);
     setError('');
     try {
-      const res = await pb.send<{ token: string; record: never }>('/api/jul/register', { method: 'POST', body: { code, name: name.trim(), email: email.trim(), password, personId } });
+      const res = await pb.send<{ token: string; record: never }>('/api/jul/register', { method: 'POST', body: { code, name: name.trim(), email: email.trim(), password } });
       pb.authStore.save(res.token, res.record);
       navigate('/', { replace: true });
     } catch (err) {
@@ -111,19 +109,6 @@ export function JoinPage() {
   return (
     <AuthFrame title="Bli med i jula" lead="Lag din eigen konto. Det tek eit halvt minutt.">
       <form className="form" onSubmit={submit}>
-        {people.length > 0 && (
-          <div className="field">
-            <span className="field-label">Er du ein av desse?</span>
-            <div className="chips">
-              {people.map((p) => (
-                <button key={p.id} type="button" className={`chip ${personId === p.id ? 'on' : ''}`} aria-pressed={personId === p.id}
-                  onClick={() => { const on = personId === p.id; setPersonId(on ? '' : p.id); if (!on) setName(p.name); }}>
-                  {p.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         <Field label="Namnet ditt"><input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={80} /></Field>
         <Field label="E-post"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" required /></Field>
         <Field label="Vel eit passord" hint="Minst 8 teikn"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" required minLength={8} /></Field>
