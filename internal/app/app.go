@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
-	"errors"
 	"io/fs"
 	"log"
 	"net/http"
@@ -15,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/apis"
 	"github.com/pocketbase/pocketbase/core"
@@ -63,6 +61,7 @@ func (s *server) setInvite(code string) {
 func Register(pb *pocketbase.PocketBase, cfg Config) {
 	s := &server{cfg: cfg, ai: newNisse(cfg)}
 	registerLedgerHooks(pb)
+	registerPrivacyHooks(pb)
 	s.registerNotify(pb)
 
 	pb.OnRecordAuthRequest("users").BindFunc(func(e *core.RecordAuthRequestEvent) error {
@@ -73,6 +72,9 @@ func Register(pb *pocketbase.PocketBase, cfg Config) {
 	})
 
 	pb.OnServe().BindFunc(func(se *core.ServeEvent) error {
+		if err := rotateExposedShareTokens(se.App); err != nil {
+			return err
+		}
 		if err := ensureSchema(se.App); err != nil {
 			return err
 		}
@@ -104,6 +106,7 @@ func Register(pb *pocketbase.PocketBase, cfg Config) {
 		}
 
 		se.Router.BindFunc(s.securityHeaders)
+		se.Router.BindFunc(validateCollectionQuery)
 
 		g := se.Router.Group("/api/jul")
 		g.GET("/invite/{code}", s.inviteInfo)
@@ -244,6 +247,9 @@ func (s *server) register(e *core.RequestEvent) error {
 	if !s.validInvite(body.Code) || !s.settings(e.App).SignupOpen {
 		return e.ForbiddenError("Invitasjonen er ikkje gyldig.", nil)
 	}
+	if body.PersonID != "" {
+		return e.BadRequestError("Ei ny konto kan ikkje ta over ein eksisterande person.", nil)
+	}
 	body.Name = strings.TrimSpace(body.Name)
 	if body.Name == "" || len(body.Password) < 8 {
 		return e.BadRequestError("Skriv namn og eit passord på minst 8 teikn.", nil)
@@ -271,24 +277,14 @@ func (s *server) register(e *core.RequestEvent) error {
 			return err
 		}
 
-		var person *core.Record
-		if body.PersonID != "" {
-			person, err = tx.FindFirstRecordByFilter("people", `id = {:id} && user = ""`, dbx.Params{"id": body.PersonID})
-			if err != nil {
-				return errors.New("personen er alt knytt til ein konto")
-			}
-		} else {
-			peopleCol, err := tx.FindCollectionByNameOrId("people")
-			if err != nil {
-				return err
-			}
-			person = core.NewRecord(peopleCol)
-			person.Set("name", body.Name)
-			person.Set("color", color)
-			person.Set("created_by", user.Id)
+		peopleCol, err := tx.FindCollectionByNameOrId("people")
+		if err != nil {
+			return err
 		}
-		// Ein som får eigen konto, styrer sin eigen økonomi frå no av. Gamle utlegg står urørte.
-		person.Set("covered_by", "")
+		person := core.NewRecord(peopleCol)
+		person.Set("name", body.Name)
+		person.Set("color", color)
+		person.Set("created_by", user.Id)
 		person.Set("user", user.Id)
 		if err := tx.Save(person); err != nil {
 			return err

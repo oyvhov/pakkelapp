@@ -104,8 +104,8 @@ if (privateLink.status === 200) {
 check('kan ikkje knyte person til konto sjølv', (await create(anna, 'people', { name: 'X', created_by: anna.id, user: bjorn.id })).status >= 400);
 const info = await api(null, 'GET', `/api/jul/invite/${code}`);
 check('invitasjon skjuler namna i familien', info.status === 200 && Array.isArray(info.json.people) && info.json.people.length === 0);
-const emil = await register('Emil', boy.id);
-check('kan overta ein eksisterande person', (await list(emil, 'people')).find((p) => p.id === boy.id)?.user === emil.id);
+const takeover = await api(null, 'POST', '/api/jul/register', { code, name: 'Emil', email: `Emil${run}@test.local`, password: 'testpassord1', personId: boy.id });
+check('registrering kan ikkje overta ein eksisterande person', takeover.status === 400 && (await list(anna, 'people')).find((p) => p.id === boy.id)?.user === '');
 
 const ssrf = await api(anna.token, 'POST', '/api/jul/preview', { url: 'http://127.0.0.1:8080/api/health' });
 check('lenkehenting når ikkje interne adresser', ssrf.status === 200 && !ssrf.json.title, JSON.stringify(ssrf.json));

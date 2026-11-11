@@ -177,7 +177,7 @@ func ensureSchema(app core.App) error {
 	lists, err := upsert(app, "lists", func(c *core.Collection) {
 		c.ListRule = rule(all(authed, canSee("")))
 		c.ViewRule = rule(all(authed, canSee("")))
-		c.CreateRule = rule(all(authed, "@request.body.owner = "+me, noFamily, `(@request.body.kind = "plan" || @request.body.person != "")`))
+		c.CreateRule = rule(all(authed, "@request.body.owner = "+me, noFamily, `@request.body.share_token:isset = false`, `(@request.body.kind = "plan" || @request.body.person != "")`))
 		// Listetype og person styrer spoilarvernet, så dei kan ikkje endrast etterpå.
 		c.UpdateRule = rule(all(authed, noFamily, `@request.body.owner:isset = false`, `@request.body.kind:isset = false`, `@request.body.person:isset = false`, `@request.body.year:isset = false`, `@request.body.share_token:isset = false`, fmt.Sprintf(`(owner = %[1]s || (visibility = "shared" && editors.id ?= %[1]s && @request.body.editors:isset = false && @request.body.viewers:isset = false && @request.body.visibility:isset = false))`, me)))
 		c.DeleteRule = rule(all(authed, "owner = "+me))
@@ -190,7 +190,7 @@ func ensureSchema(app core.App) error {
 			&core.NumberField{Name: "budget", Min: floatPtr(0)},
 			&core.SelectField{Name: "occasion", MaxSelect: 1, Values: []string{"jul", "birthday", "confirmation", "wedding", "other"}},
 			&core.TextField{Name: "event_date", Max: 10},
-			&core.TextField{Name: "share_token", Max: 64},
+			&core.TextField{Name: "share_token", Max: 64, Hidden: true},
 			&core.RelationField{Name: "owner", CollectionId: users.Id, MaxSelect: 1, Required: true},
 			&core.RelationField{Name: "person", CollectionId: people.Id, MaxSelect: 1},
 			&core.RelationField{Name: "editors", CollectionId: users.Id, MaxSelect: 200},

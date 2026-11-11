@@ -473,8 +473,14 @@ func (s *server) settle(e *core.RequestEvent) error {
 		}
 	}
 	wallets := make(map[string]string, len(f.people))
-	for id := range f.people {
-		wallets[id] = f.wallet(id)
+	info, err := e.RequestInfo()
+	if err != nil {
+		return e.InternalServerError("", err)
+	}
+	for id, person := range f.people {
+		if allowed, _ := e.App.CanAccessRecord(person, info, person.Collection().ViewRule); allowed {
+			wallets[id] = f.wallet(id)
+		}
 	}
 	return e.JSON(http.StatusOK, map[string]any{"me": me, "owe": owe, "owed": owed, "transfers": visible, "wallets": wallets, "disputed": disputed})
 }
@@ -579,7 +585,7 @@ func (s *server) setCoveredBy(e *core.RequestEvent) error {
 		targetUser := target.GetString("user")
 		switch {
 		case personUser == "":
-			if targetUser != actor {
+			if targetUser != actor || person.GetString("created_by") != actor {
 				return e.ForbiddenError("Du kan berre ta på deg kostnadene sjølv.", nil)
 			}
 			person.Set("covered_by", target.Id)

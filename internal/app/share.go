@@ -20,6 +20,34 @@ func randomToken() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
+// Før feltet blir verna, trekk tilbake nøklar som kunne lesast med tilgang til berre eitt ønske.
+// Skjemaet blir endra etterpå, slik at ei avbroten flytting blir prøvd igjen ved neste oppstart.
+func rotateExposedShareTokens(app core.App) error {
+	collection, err := app.FindCollectionByNameOrId("lists")
+	if err != nil {
+		return nil // Fyrste oppstart har enno inga listesamling.
+	}
+	field := collection.Fields.GetByName("share_token")
+	if field == nil || field.GetHidden() {
+		return nil
+	}
+	lists, err := app.FindRecordsByFilter("lists", `share_token != ""`, "", 0, 0)
+	if err != nil {
+		return err
+	}
+	for _, list := range lists {
+		token, err := randomToken()
+		if err != nil {
+			return err
+		}
+		list.Set("share_token", token)
+		if err := app.Save(list); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func isJulList(list *core.Record) bool {
 	o := list.GetString("occasion")
 	return o == "" || o == "jul"
