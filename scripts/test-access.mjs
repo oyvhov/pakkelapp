@@ -49,6 +49,8 @@ check('standardlister blir oppretta', wishes && annaPlan);
 
 const wish = (await create(anna, 'gifts', { list: wishes.id, title: 'Kikkert', created_by: anna.id, price: 1200 })).json;
 check('kan leggje til ønske', !!wish.id);
+check('nye ønskelister er private', !has(await list(bjorn, 'gifts'), wish.id) && !has(await list(cato, 'gifts'), wish.id));
+check('kan dele ønskelista med utvalde', (await api(anna.token, 'PATCH', `/api/collections/lists/records/${wishes.id}`, { visibility: 'shared', viewers: [bjorn.id, cato.id] })).status === 200);
 check('familien ser ønsket', has(await list(bjorn, 'gifts'), wish.id));
 check('andre kan ikkje endre ønsket', (await api(bjorn.token, 'PATCH', `/api/collections/gifts/records/${wish.id}`, { title: 'Hack' })).status >= 400);
 
@@ -90,9 +92,18 @@ check('andre sine e-postar er skjulte', !(await list(bjorn, 'users')).find((u) =
 
 const boy = (await create(anna, 'people', { name: 'Vesle Emil', created_by: anna.id })).json;
 check('kan leggje til person utan konto', !!boy.id, JSON.stringify(boy));
+const privateLink = await create(anna, 'person_links', { user: anna.id, source: boy.id, target: personOf(bjorn).id });
+check('kan kople eigen person privat', privateLink.status === 200, JSON.stringify(privateLink.json));
+if (privateLink.status === 200) {
+  const linkPath = `/api/collections/person_links/records/${privateLink.json.id}`;
+  check('berre eg ser koplinga', has(await list(anna, 'person_links'), privateLink.json.id) && !has(await list(bjorn, 'person_links'), privateLink.json.id));
+  check('koplinga endrar ikkje kontoen', (await list(anna, 'people')).find((p) => p.id === boy.id)?.user === '' && (await list(bjorn, 'people')).find((p) => p.user === bjorn.id)?.id === personOf(bjorn).id);
+  check('berre eg kan fjerne koplinga', (await api(bjorn.token, 'DELETE', linkPath)).status === 404);
+  check('kan angre koplinga', (await api(anna.token, 'DELETE', linkPath)).status === 204 && has(await list(anna, 'people'), boy.id));
+}
 check('kan ikkje knyte person til konto sjølv', (await create(anna, 'people', { name: 'X', created_by: anna.id, user: bjorn.id })).status >= 400);
 const info = await api(null, 'GET', `/api/jul/invite/${code}`);
-check('invitasjon viser ledige personar', (info.json.people ?? []).some((p) => p.id === boy.id));
+check('invitasjon skjuler namna i familien', info.status === 200 && Array.isArray(info.json.people) && info.json.people.length === 0);
 const emil = await register('Emil', boy.id);
 check('kan overta ein eksisterande person', (await list(emil, 'people')).find((p) => p.id === boy.id)?.user === emil.id);
 

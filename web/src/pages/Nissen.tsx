@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ArrowRight, ExternalLink, Loader2, Plus, Search, Send, Sparkles } from 'lucide-react';
+import { ArrowRight, ExternalLink, Loader2, Plus, Search, Send } from 'lucide-react';
 import { isRecipient, saveNote, useData } from '../data';
 import { useGifts } from '../gifts';
 import { errorText, firstName, kr, pb, type Person } from '../lib';
@@ -58,7 +58,9 @@ const QUESTIONS: Question[] = [
 
 const LABELS: Record<string, string> = { age: 'Alder', gender: 'Kjønn', relation: 'Relasjon', budget: 'Budsjett', type: 'Type gåve', interests: 'Interesser' };
 
-function Guide({ person, onDone, onSkipAll }: { person?: Person; onDone: (answers: Record<string, string>, save: Partial<Person>) => void; onSkipAll: () => void }) {
+type Answers = Record<string, string>;
+
+function Guide({ person, answers, onAnswers, onDone }: { person?: Person; answers: Answers; onAnswers: (answers: Answers) => void; onDone: (answers: Answers, save: Partial<Person>) => void }) {
   const known = (id: string) => {
     if (!person) return false;
     if (id === 'age') return !!person.birth_year || !!person.age_group;
@@ -69,7 +71,6 @@ function Guide({ person, onDone, onSkipAll }: { person?: Person; onDone: (answer
   };
   const questions = QUESTIONS.filter((q) => !known(q.id));
   const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [save, setSave] = useState<Partial<Person>>({});
   const [text, setText] = useState('');
   const name = person ? firstName(person.name) : 'personen';
@@ -78,7 +79,7 @@ function Guide({ person, onDone, onSkipAll }: { person?: Person; onDone: (answer
   const advance = (value?: string, extra?: Partial<Person>) => {
     const nextAnswers = value ? { ...answers, [q.id]: value } : answers;
     const nextSave = extra ? { ...save, ...extra } : save;
-    setAnswers(nextAnswers);
+    onAnswers(nextAnswers);
     setSave(nextSave);
     setText('');
     if (index + 1 >= questions.length) onDone(nextAnswers, nextSave);
@@ -101,7 +102,7 @@ function Guide({ person, onDone, onSkipAll }: { person?: Person; onDone: (answer
         )}
         <div className="guide-foot">
           <button className="text-btn" onClick={() => advance()}>Hopp over</button>
-          <button className="text-btn" onClick={() => (Object.keys(answers).length ? onDone(answers, save) : onSkipAll())}>{Object.keys(answers).length ? 'Finn gåver no' : 'Spør fritt i staden'}</button>
+          {Object.keys(answers).length > 0 && <button className="text-btn" onClick={() => onDone(answers, save)}>Finn gåver no</button>}
         </div>
       </div>
     </section>
@@ -116,22 +117,24 @@ export function NissenPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
-  const [guiding, setGuiding] = useState(true);
+  const [answers, setAnswers] = useState<Answers>({});
   const [error, setError] = useState('');
   const end = useRef<HTMLDivElement>(null);
   const chatRun = useRef(0);
   const person = data.peopleById.get(personId);
   const first = firstName(person?.name);
 
-  useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages, busy]);
+  useEffect(() => {
+    if (messages.length) end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, busy]);
 
-  const ask = async (content: string) => {
+  const ask = async (content: string, context: Answers = {}) => {
     const clean = content.trim();
     if (!clean || busy) return;
-    const next: Message[] = [...messages, { id: ++nextId, role: 'user', content: clean }];
+    const lines = Object.entries(context).map(([id, value]) => `${LABELS[id]}: ${value}`);
+    const next: Message[] = [...messages, { id: ++nextId, role: 'user', content: [clean, ...lines].join('\n') }];
     const run = ++chatRun.current;
     setMessages(next);
-    setText('');
     setBusy(true);
     setError('');
     try {
@@ -150,6 +153,13 @@ export function NissenPage() {
     }
   };
 
+  const sendQuestion = (event: FormEvent) => {
+    event.preventDefault();
+    if (busy || !text.trim()) return;
+    void ask(text, messages.length ? undefined : answers);
+    setText('');
+  };
+
   // Butikkar og lenker kjem etter det raske svaret. Du kan halde fram å skrive medan Nissen leitar.
   const findShops = async (reply: Message) => {
     let shops: ShopMatch[] = [];
@@ -166,10 +176,8 @@ export function NissenPage() {
     }));
   };
 
-  const finishGuide = (answers: Record<string, string>, save: Partial<Person>) => {
-    setGuiding(false);
-    const lines = Object.entries(answers).map(([k, v]) => `${LABELS[k]}: ${v}`);
-    void ask(`Finn gode gåveidear${person ? ` til ${first}` : ''}.${lines.length ? `\n${lines.join('\n')}` : ''}`);
+  const finishGuide = (answers: Answers, save: Partial<Person>) => {
+    void ask(`Finn gode gåveidear${person ? ` til ${first}` : ''}.`, answers);
     // Svara blir lagra i mitt private notat om personen. Ingen andre ser dei.
     if (person && Object.keys(save).length && person.user !== data.me.id) {
       const { relation, gender, age_group, interests } = save;
@@ -183,7 +191,8 @@ export function NissenPage() {
     setPersonId(id);
     setMessages([]);
     setError('');
-    setGuiding(true);
+    setAnswers({});
+    setText('');
   };
 
   if (!data.config.aiEnabled) {
@@ -195,7 +204,7 @@ export function NissenPage() {
     );
   }
 
-  const showGuide = guiding && messages.length === 0 && !busy;
+  const showGuide = messages.length === 0;
   return (
     <div className="page nisse">
       <header className="page-head">
@@ -211,14 +220,8 @@ export function NissenPage() {
         ))}
       </div>
 
-      <div className="chat">
-        {showGuide && <Guide key={personId} person={person} onDone={finishGuide} onSkipAll={() => setGuiding(false)} />}
-        {!showGuide && messages.length === 0 && !busy && (
-          <div className="chat-intro">
-            <Sparkles size={26} />
-            <p>{person ? `Kva leitar du etter til ${first}?` : 'Kven leitar du etter gåve til?'}</p>
-          </div>
-        )}
+      {showGuide && <Guide key={personId} person={person} answers={answers} onAnswers={setAnswers} onDone={finishGuide} />}
+      {!showGuide && <div className="chat">
         {messages.map((m) => (
           <div key={m.id} className={`msg ${m.role}`}>
             <p>{m.content}</p>
@@ -252,14 +255,12 @@ export function NissenPage() {
         {busy && <div className="msg assistant thinking"><Loader2 size={17} className="spin" /> Nissen leitar i verkstaden …</div>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <div ref={end} />
-      </div>
+      </div>}
 
-      {!showGuide && (
-        <form className="chat-input" onSubmit={(e: FormEvent) => { e.preventDefault(); void ask(text); }}>
-          <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Skriv ei melding" aria-label="Melding til Nissen" maxLength={4000} />
-          <button className="icon-btn primary" aria-label="Send" disabled={busy || !text.trim()}><Send size={19} /></button>
-        </form>
-      )}
+      <form className={showGuide ? 'chat-input guide-input' : 'chat-input'} onSubmit={sendQuestion}>
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={showGuide ? 'Spør fritt …' : 'Skriv ei melding'} aria-label="Melding til Nissen" maxLength={4000} />
+        <button className="icon-btn primary" aria-label="Send" disabled={busy || !text.trim()}><Send size={19} /></button>
+      </form>
     </div>
   );
 }

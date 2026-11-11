@@ -317,7 +317,7 @@ export function PeoplePage() {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const byName = (a: Person, b: Person) => a.name.localeCompare(b.name);
-  const others = data.people.filter((p) => p.user !== data.me.id).sort(byName);
+  const others = data.directory.filter((p) => p.user !== data.me.id).sort(byName);
   const chosen = others.filter((p) => isRecipient(data, p.id));
   const rest = others.filter((p) => !isRecipient(data, p.id));
   const lastYear = data.recipients.filter((r) => r.year === data.season - 1 && data.peopleById.has(r.person));
@@ -452,6 +452,69 @@ function PersonSummary({ personId, split }: { personId: string; split: ReturnTyp
   );
 }
 
+function PrivatePersonLinks({ person }: { person: Person }) {
+  const data = useData();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [target, setTarget] = useState('');
+  const [busy, setBusy] = useState(false);
+  const links = data.person_links.filter((link) => link.target === person.id || link.source === person.id);
+  const canLink = !person.user && person.created_by === data.me.id && links.length === 0;
+  const accounts = data.directory.filter((p) => p.user && p.user !== data.me.id).sort((a, b) => a.name.localeCompare(b.name));
+  if (!links.length && (!canLink || !accounts.length)) return null;
+
+  const linkPerson = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!target || busy) return;
+    setBusy(true);
+    try {
+      await pb.collection('person_links').create({ user: data.me.id, source: person.id, target });
+      await data.reload('person_links');
+      navigate(`/folk/${target}`, { replace: true });
+      toast('Personane er kopla i di oversikt');
+    } catch (err) { toast(errorText(err)); } finally { setBusy(false); }
+  };
+  const unlink = async (id: string) => {
+    setBusy(true);
+    try {
+      await pb.collection('person_links').delete(id);
+      await data.reload('person_links');
+      toast('Personane blir viste kvar for seg igjen');
+    } catch (err) { toast(errorText(err)); } finally { setBusy(false); }
+  };
+  return (
+    <section className="panel">
+      {canLink ? (
+        <details className="person-details">
+          <summary>Kople til ein person med konto</summary>
+          <form className="form" onSubmit={linkPerson}>
+            <Field label="Kven er dette?" hint="Du får éi oppføring i Folk og Oversikt. Berre du ser koplinga, og du kan angre henne.">
+              <select required value={target} onChange={(e) => setTarget(e.target.value)}>
+                <option value="">Vel person med konto</option>
+                {accounts.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+            <button className="btn primary" disabled={!target || busy}>Kople saman i mi oversikt</button>
+          </form>
+        </details>
+      ) : (
+        <>
+          <h2>Kopla i di oversikt</h2>
+          {links.map((link) => {
+            const otherId = link.source === person.id ? link.target : link.source;
+            return (
+              <div className="action-row" key={link.id}>
+                <Link to={`/folk/${otherId}`}>{data.peopleById.get(otherId)?.name}</Link>
+                <button type="button" className="btn small ghost" disabled={busy} onClick={() => void unlink(link.id)}>Fjern kopling</button>
+              </div>
+            );
+          })}
+        </>
+      )}
+    </section>
+  );
+}
+
 export function PersonPage() {
   const { id = '' } = useParams();
   const data = useData();
@@ -463,6 +526,11 @@ export function PersonPage() {
   // Merkene for nye ønske skal stå medan ein ser på dei, og forsvinne når ein går vidare.
   useEffect(() => () => markSeen(id), [id]);
   const person = data.peopleById.get(id);
+  useEffect(() => {
+    if (!person || location.hash !== '#onske') return;
+    const frame = requestAnimationFrame(() => document.getElementById('onske')?.scrollIntoView({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
+  }, [person?.id, location.hash]);
   if (!person) return <div className="page"><Empty title="Fann ikkje personen" action={<Link className="btn ghost" to="/folk">Til Folk</Link>} /></div>;
 
   const self = person.user === data.me.id;
@@ -518,7 +586,7 @@ export function PersonPage() {
           {split.bought.length > 0 && <section>{head('Kjøpt', 'bought', split.bought.length)}<GiftView gifts={split.bought} /></section>}
           {split.planned.length > 0 && <section>{head('Planlagt', 'planned', split.planned.length)}<GiftView gifts={split.planned} /></section>}
           {noGifts && <section>{head('Gåver', '')}<p className="muted">Ingen gåver til {first} enno.</p></section>}
-          <section>
+          <section id="onske" className="person-wishes">
             {head('Ønske', 'open', split.open.length)}
             {split.open.length > 0
               ? <GiftView gifts={split.open} />
@@ -536,6 +604,7 @@ export function PersonPage() {
         </>
       )}
 
+      <PrivatePersonLinks key={person.id} person={person} />
       <Sheet open={editing} onClose={() => setEditing(false)} title={`Endre ${person.name}`} mobileEditor protect>
         {editing && <PersonForm person={person} onDone={(p) => { setEditing(false); if (!p) navigate('/folk'); }} />}
       </Sheet>

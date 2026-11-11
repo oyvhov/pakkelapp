@@ -3,6 +3,7 @@ import type { RecordModel } from 'pocketbase';
 import { daysUntil, firstName, fileTokenStale, isFest, isJul, isUpcoming, pb, refreshFileToken, seasonYear, type Claim, type Comment, type Expense, type Gift, type GiftList, type GuestClaim, type Ledger, type Person, type PersonNote, type PrivatePhoto, type NoteFields, NOTE_FIELDS, type RecipientMark, type Settlement, type User } from './lib';
 
 interface Store {
+  person_links: (RecordModel & { source: string; target: string; user: string })[];
   people: Person[];
   lists: GiftList[];
   gifts: Gift[];
@@ -16,8 +17,8 @@ interface Store {
   photos: PrivatePhoto[];
   person_notes: PersonNote[];
 }
-const EMPTY: Store = { people: [], lists: [], gifts: [], claims: [], guest_claims: [], comments: [], users: [], expenses: [], settlements: [], recipients: [], photos: [], person_notes: [] };
-const COLLECTIONS = ['people', 'lists', 'gifts', 'claims', 'guest_claims', 'comments', 'users', 'expenses', 'settlements', 'recipients', 'photos', 'person_notes'] as const;
+const EMPTY: Store = { people: [], lists: [], gifts: [], claims: [], guest_claims: [], comments: [], users: [], expenses: [], settlements: [], recipients: [], photos: [], person_notes: [], person_links: [] };
+const COLLECTIONS = ['people', 'lists', 'gifts', 'claims', 'guest_claims', 'comments', 'users', 'expenses', 'settlements', 'recipients', 'photos', 'person_notes', 'person_links'] as const;
 type Key = (typeof COLLECTIONS)[number];
 
 export function useAuth() {
@@ -42,6 +43,8 @@ export interface DataValue extends Store {
   me: User;
   myPerson?: Person;
   peopleById: Map<string, Person>;
+  directory: Person[];
+  linkedTarget: Map<string, string>;
   listsById: Map<string, GiftList>;
   usersById: Map<string, User>;
   reload: (key: Key) => Promise<void>;
@@ -153,6 +156,11 @@ export function DataProvider({ children, me }: { children: ReactNode; me: Record
       return { ...p, ...extra };
     });
     const peopleById = new Map(people.map((p) => [p.id, p]));
+    const links = store.person_links.filter((link) => {
+      const source = peopleById.get(link.source);
+      return source?.created_by === me.id && !source.user && peopleById.get(link.target)?.user;
+    });
+    const linkedTarget = new Map(links.map((link) => [link.source, link.target]));
     const listsById = new Map(store.lists.map((l) => [l.id, l]));
     const usersById = new Map(store.users.map((u) => [u.id, u]));
     const listOfGift = new Map(store.gifts.map((g) => [g.id, listsById.get(g.list)]));
@@ -161,6 +169,9 @@ export function DataProvider({ children, me }: { children: ReactNode; me: Record
     return {
       ...store,
       people,
+      person_links: links,
+      directory: people.filter((p) => !linkedTarget.has(p.id)),
+      linkedTarget,
       // Ein reservasjon til jul gjeld éi jul. Andre høve skjer berre éin gong.
       claims: [...store.claims, ...guests].filter((c) => c.year === season || !isJul(listOfGift.get(c.gift))),
       allGifts,
@@ -208,10 +219,10 @@ export function upcomingEvents(data: DataValue) {
 
 /** Det eg sjølv har planlagt eller teke til ein person no. */
 export function myGifts(data: DataValue, personId: string) {
-  const planned = data.gifts.filter((g) => planInScope(data, data.listsById.get(g.list)) && g.recipients.includes(personId) && myPortion(data, g) > 0);
+  const planned = data.gifts.filter((g) => planInScope(data, data.listsById.get(g.list)) && g.recipients.some((id) => matchesPerson(data, id, personId)) && myPortion(data, g) > 0);
   const claimed = data.gifts.filter((g) => {
     const list = data.listsById.get(g.list);
-    return list?.kind === 'wishes' && inScope(data, list) && list.person === personId && data.claims.some((c) => c.gift === g.id && c.user === data.me.id);
+    return list?.kind === 'wishes' && inScope(data, list) && matchesPerson(data, list.person, personId) && data.claims.some((c) => c.gift === g.id && c.user === data.me.id);
   });
   const bought = planned.filter(isBoughtPlan);
   const myClaim = (g: Gift) => data.claims.find((c) => c.gift === g.id && c.user === data.me.id);
@@ -254,10 +265,16 @@ export function myWishLists(data: DataValue) {
   return current.length > 0 ? current : mine;
 }
 
+// Koplinga gjeld berre lesing i mi oversikt. Originale person-id-ar blir brukte ved lagring.
+function matchesPerson(data: DataValue, id: string, personId: string) {
+  return id === personId || data.linkedTarget.get(id) === personId;
+}
+
 /** Merka (skal få gåve, budsjett, fullført) gjeld jula. */
 export function myMark(data: DataValue, personId: string) {
   if (data.fest) return undefined;
-  return data.recipients.find((r) => r.person === personId && r.year === data.season);
+  return data.recipients.find((r) => r.person === personId && r.year === data.season)
+    ?? data.recipients.find((r) => r.year === data.season && data.linkedTarget.get(r.person) === personId);
 }
 
 export function isMarked(data: DataValue, personId: string) {
@@ -277,8 +294,8 @@ export async function setRecipient(data: DataValue, personId: string, on: boolea
       data.patch('recipients', (items) => [...items, { id: `ny-${personId}`, user: data.me.id, person: personId, year: data.season, budget: 0 } as RecipientMark]);
       await pb.collection('recipients').create({ user: data.me.id, person: personId, year: data.season });
     } else if (!on && existing) {
-      data.patch('recipients', (items) => items.filter((r) => r.id !== existing.id));
-      await pb.collection('recipients').delete(existing.id);
+      const selected = data.recipients.filter((r) => r.year === data.season && matchesPerson(data, r.person, personId));
+      for (const mark of selected) await pb.collection('recipients').delete(mark.id);
     }
   } finally {
     await data.reload('recipients');
@@ -287,6 +304,7 @@ export async function setRecipient(data: DataValue, personId: string, on: boolea
 
 /** Budsjett, fullført og rekkefølge er private og ligg på mi eiga liste. Personen kan vere på lista berre fordi eg har ei gåve. */
 async function saveMark(data: DataValue, personId: string, change: Partial<Pick<RecipientMark, 'budget' | 'done' | 'sort'>>) {
+  personId = myMark(data, personId)?.person ?? personId;
   const filter = pb.filter('user = {:u} && person = {:p} && year = {:y}', { u: data.me.id, p: personId, y: data.season });
   const found = await pb.collection('recipients').getList<RecipientMark>(1, 1, { filter });
   if (found.items[0]) await pb.collection('recipients').update(found.items[0].id, change);
@@ -301,7 +319,8 @@ export async function setBudget(data: DataValue, personId: string, budget: numbe
 export const isDone = (data: DataValue, personId: string) => !!myMark(data, personId)?.done;
 
 export async function setDone(data: DataValue, personId: string, done: boolean) {
-  data.patch('recipients', (items) => items.map((r) => (r.person === personId && r.year === data.season ? { ...r, done } : r)));
+  const mark = myMark(data, personId);
+  if (mark) data.patch('recipients', (items) => items.map((r) => r.id === mark.id ? { ...r, done } : r));
   try {
     await saveMark(data, personId, { done });
   } finally {
@@ -325,11 +344,11 @@ export function orderRecipients(data: DataValue, people: Person[]) {
 }
 
 export function coverage(data: DataValue, personId: string) {
-  const planned = data.gifts.filter((g) => planInScope(data, data.listsById.get(g.list)) && g.recipients.includes(personId));
+  const planned = data.gifts.filter((g) => planInScope(data, data.listsById.get(g.list)) && g.recipients.some((id) => matchesPerson(data, id, personId)));
   // Ønskelista frå jula er like nyttig til bursdagen.
   const wishes = data.gifts.filter((g) => {
     const list = data.listsById.get(g.list);
-    return list?.kind === 'wishes' && list.person === personId && (isJul(list) || inScope(data, list));
+    return list?.kind === 'wishes' && matchesPerson(data, list.person, personId) && (isJul(list) || inScope(data, list));
   });
   return { planned, wishes };
 }
@@ -370,11 +389,12 @@ export function useSeen() {
 export function isNewWish(data: DataValue, state: Seen, gift: Gift) {
   const list = data.listsById.get(gift.list);
   if (list?.kind !== 'wishes' || !list.person || list.person === data.myPerson?.id || gift.created_by === data.me.id || gift.archived) return false;
-  return new Date(gift.created.replace(' ', 'T')).getTime() > (state.people[list.person] ?? state.base);
+  const directoryId = data.linkedTarget.get(list.person) ?? list.person;
+  return new Date(gift.created.replace(' ', 'T')).getTime() > Math.max(state.people[directoryId] ?? state.base, state.people[list.person] ?? state.base);
 }
 
 export function newWishCount(data: DataValue, state: Seen, personId: string) {
-  return data.gifts.filter((g) => data.listsById.get(g.list)?.person === personId && isNewWish(data, state, g)).length;
+  return data.gifts.filter((g) => matchesPerson(data, data.listsById.get(g.list)?.person ?? '', personId) && isNewWish(data, state, g)).length;
 }
 
 export const newLabel = (n: number) => `${n} ${n === 1 ? 'nytt' : 'nye'}`;

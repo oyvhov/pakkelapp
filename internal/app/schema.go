@@ -154,6 +154,26 @@ func ensureSchema(app core.App) error {
 		return err
 	}
 
+	// Ei privat kopling samlar to personar i oversikta til éin brukar.
+	// Ho endrar ingen person, gåve, tilgangsregel eller lommebok.
+	_, err = upsert(app, "person_links", func(c *core.Collection) {
+		mine := all(authed, "user = "+me)
+		c.ListRule = rule(mine)
+		c.ViewRule = rule(mine)
+		c.CreateRule = rule(all(mine, "source.created_by = "+me, `source.user = ""`, `target.user != ""`, "target.user != "+me))
+		c.UpdateRule = nil
+		c.DeleteRule = rule(mine)
+		c.Fields.Add(
+			&core.RelationField{Name: "user", CollectionId: users.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+			&core.RelationField{Name: "source", CollectionId: people.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+			&core.RelationField{Name: "target", CollectionId: people.Id, MaxSelect: 1, Required: true, CascadeDelete: true},
+		)
+		c.AddIndex("idx_person_links_source", true, "user, source", "")
+	})
+	if err != nil {
+		return err
+	}
+
 	lists, err := upsert(app, "lists", func(c *core.Collection) {
 		c.ListRule = rule(all(authed, canSee("")))
 		c.ViewRule = rule(all(authed, canSee("")))

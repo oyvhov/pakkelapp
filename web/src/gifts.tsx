@@ -121,7 +121,6 @@ export function GiftCard({ gift, row }: { gift: Gift; row?: boolean }) {
   const isWish = list?.kind === 'wishes';
   const ownWish = isWish && !!data.myPerson && list?.person === data.myPerson.id;
   const claims = data.claims.filter((c) => c.gift === gift.id);
-  const claimers = claims.map((c) => claimerName(data, c)).filter(Boolean).join(' og ');
   const seen = useSeen();
   const fresh = isNewWish(data, seen, gift);
   const wisher = list?.person ? data.peopleById.get(list.person)?.name.split(' ')[0] : '';
@@ -202,7 +201,7 @@ export function GiftCard({ gift, row }: { gift: Gift; row?: boolean }) {
           {gift.price > 0 ? <strong>{kr(gift.price)}</strong> : gift.best_price > 0 && <strong>frå {kr(gift.best_price)}</strong>}
           {gift.shop ? <span>{gift.shop}</span> : gift.best_shop && <span>{gift.best_shop}</span>}
         </span>
-        {isWish && !ownWish && <span className={`pill ${claims.length ? 'pill-taken' : 'pill-free'}`}>{claims.length ? `Teken av ${claimers}` : 'Ledig'}</span>}
+        {isWish && !ownWish && <span className={`pill ${claims.length ? 'pill-taken' : 'pill-free'}`}>{claims.length ? 'Teken' : 'Ledig'}</span>}
         {!isWish && status && (canUpdate ? (
           <button type="button" className={`pill pill-btn pill-${status.id}`} onClick={cycle} aria-label={`Status ${status.label}. Trykk for neste`}>{status.label}</button>
         ) : <span className={`pill pill-${status.id}`}>{status.label}</span>)}
@@ -837,7 +836,13 @@ function DetailBody({ gift, onClose }: { gift: Gift; onClose: () => void }) {
 
       {isWish && !ownWish && (
         <section className="claim-box">
-          <p>{claimNames.length ? `${claimNames.join(' og ')} har teke denne. ${data.peopleById.get(list!.person)?.name.split(' ')[0] ?? 'Personen'} ser det ikkje.` : 'Ingen har teke denne enno.'}</p>
+          <p>{claims.length ? 'Ønsket er teke.' : 'Ingen har teke denne enno.'}</p>
+          {claimNames.length > 0 && (
+            <details className="claim-names">
+              <summary>Vis kven som har teke ønsket</summary>
+              <p>{claimNames.join(' og ')}</p>
+            </details>
+          )}
           <div className="claim-actions">
             {myClaim ? (
               <>
