@@ -58,6 +58,12 @@ PocketBase tek backup kvar natt klokka 04:15 og held på 14 stykke i volumet `pa
 docker cp pakkelapp:/data/backups ./backups
 ```
 
+På Windows-serveren blir backupen òg kopiert til **Pakkelapp – backup** i Google Drive klokka **04:45**. Dei siste sju kalenderdagane blir haldne, og for eldre kopiar blir den siste i kvar ISO-veke halden utan sluttdato. Kvar ZIP inneheld PocketBase-databasen med bilete, kjeldekoden frå Git, `.env` og ei rettleiing for gjenoppretting.
+
+Jobben bruker Google Drive for desktop på `G:` og køyrer som den innlogga Windows-brukaren. Han køyrer òg ved innlogging, tek att ei missa køyring og prøver igjen kvar halvtime ved feil, opptil seks gonger. Docker og Google Drive må vere i gang. Opplastinga til nettskya blir utført av Google Drive for desktop.
+
+Oppsettet kan installerast på nytt med `scripts/install-backup-task.ps1`. Ei manuell køyring er `python scripts/backup-to-drive.py`. Loggen og ein lokal kopi ligg under `backups/google-drive/`. Arkiva inneheld driftsløyndomar frå `.env`.
+
 ## Utvikling
 
 Krev Node 22 og Docker. Go treng ikkje vere installert.
