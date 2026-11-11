@@ -860,9 +860,6 @@ button.shelf-gift:hover { transform: translateY(-9px) rotate(0); z-index: 2; }
 .pr-gifts { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .pr-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px 13px; }
 .pr-actions .btn { min-width: 0; min-height: 44px; padding: 10px 8px; }
-.pr-menu { flex: none; align-self: center; margin-right: 4px; }
-.pr-menu-actions { display: flex; flex-direction: column; gap: 8px; }
-.pr-menu-actions .btn { justify-content: flex-start; min-height: 48px; }
 .person-wishes { scroll-margin-top: 90px; }
 .show-all { display: block; margin: 8px auto 0; }
 

@@ -1,11 +1,11 @@
 import { useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ArrowUpDown, Check, ChevronDown, Gift as GiftIcon, Heart, MoreHorizontal, PartyPopper, Plus, RotateCcw, ShoppingBag, Sparkles, Wallet, X } from 'lucide-react';
-import { celebrate, Count, useFlip } from '../motion';
-import { coverage, inScope, isDone, isRecipient, myGifts, myMark, myPortion, newLabel, newWishCount, orderRecipients, planInScope, saveOrder, setDone, upcomingEvents, useData, useSeen } from '../data';
+import { ArrowRight, ArrowUpDown, Check, ChevronDown, Gift as GiftIcon, Heart, PartyPopper, Plus, ShoppingBag, Sparkles, Wallet, X } from 'lucide-react';
+import { Count, useFlip } from '../motion';
+import { coverage, inScope, isDone, isRecipient, myGifts, myMark, myPortion, newLabel, newWishCount, orderRecipients, planInScope, saveOrder, upcomingEvents, useData, useSeen } from '../data';
 import { GiftCard, GiftView, shareOf, useGifts, ViewToggle } from '../gifts';
 import { AdventCandles, Balloons, Bunting, Garland, PineBranch } from '../decor';
-import { christmas, daysUntil, errorText, firstName, haptic, isHttpUrl, kr, money, STATUSES, type Gift, type Person, type Status } from '../lib';
+import { christmas, daysUntil, firstName, isHttpUrl, kr, money, STATUSES, type Gift, type Person, type Status } from '../lib';
 import { Avatar, Empty, GiftImage, Sheet, useToast } from '../ui';
 import { MeCard } from './People';
 import { MobileOverview, SortList } from './HomeOrder';
@@ -89,18 +89,8 @@ function GiftShelf({ items }: { items: { gift: Gift; stage: Status }[] }) {
 
 function PersonRow({ person, open, onToggle }: { person: Person; open: boolean; onToggle: () => void }) {
   const data = useData();
-  const toast = useToast();
   const { addGift } = useGifts();
-  const [actionsOpen, setActionsOpen] = useState(false);
   const done = isDone(data, person.id);
-  const changeDone = (value: boolean, from?: Element) => {
-    haptic();
-    if (value && from) celebrate(from);
-    if (open) onToggle();
-    const failed = (err: unknown) => toast(errorText(err));
-    setDone(data, person.id, value).catch(failed);
-    toast(value ? `${firstName(person.name)} er fullført` : `${firstName(person.name)} er open igjen`, { label: 'Angre', onClick: () => { setDone(data, person.id, !value).catch(failed); } });
-  };
   const mine = myGifts(data, person.id);
   const budget = myMark(data, person.id)?.budget ?? 0;
   const free = coverage(data, person.id).wishes.filter((g) => !data.claims.some((c) => c.gift === g.id)).length;
@@ -135,7 +125,6 @@ function PersonRow({ person, open, onToggle }: { person: Person; open: boolean; 
           </span>
           <ChevronDown size={18} className="pr-chevron" />
         </button>
-        {(data.config.aiEnabled || !data.fest) && <button type="button" className="icon-btn pr-menu" aria-label={`Fleire val for ${first}`} aria-haspopup="dialog" onClick={() => setActionsOpen(true)}><MoreHorizontal size={19} /></button>}
       </div>
       <div className={`collapse ${open ? 'open' : ''}`}>
         <div className="collapse-inner">
@@ -146,12 +135,6 @@ function PersonRow({ person, open, onToggle }: { person: Person; open: boolean; 
           </div>
         </div>
       </div>
-      <Sheet open={actionsOpen} onClose={() => setActionsOpen(false)} title={person.name}>
-        <div className="pr-menu-actions">
-          {data.config.aiEnabled && <Link className="btn ghost" to={`/nissen?person=${person.id}`} onClick={() => setActionsOpen(false)}><Sparkles size={18} /> Spør Nissen</Link>}
-          {!data.fest && <button type="button" className="btn ghost" onClick={(e) => { setActionsOpen(false); changeDone(!done, e.currentTarget); }}>{done ? <RotateCcw size={18} /> : <Check size={18} />}{done ? 'Opne igjen' : 'Merk som fullført'}</button>}
-        </div>
-      </Sheet>
     </li>
   );
 }
