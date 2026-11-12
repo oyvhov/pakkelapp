@@ -666,7 +666,11 @@ func (n *nisse) lookup(ctx context.Context, model string, p *Preview) {
 	if res.Refused || parseJSON(res.Text, &out) != nil {
 		return
 	}
-	p.Title = truncate(stripCitations(out.Title), 200)
+	title := stripCitations(out.Title)
+	if isChallengeTitle(title) {
+		return
+	}
+	p.Title = truncate(title, 200)
 	if out.Price > 0 {
 		p.Price, p.Currency = out.Price, strings.ToUpper(out.Currency)
 	}
@@ -698,7 +702,7 @@ func (n *nisse) enrich(ctx context.Context, model string, p *Preview, pageText s
 		Price    float64 `json:"price"`
 		Currency string  `json:"currency"`
 	}
-	if parseJSON(res.Text, &out) != nil {
+	if parseJSON(res.Text, &out) != nil || isChallengeTitle(out.Title) {
 		return
 	}
 	if p.Title == "" {

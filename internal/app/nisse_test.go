@@ -1,6 +1,32 @@
 package app
 
-import "testing"
+import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestAIChallengeDoesNotFillPreview(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprintf(w, `{"output":[{"content":[{"type":"output_text","text":%q}]}]}`,
+			`{"title":"Client Challenge","price":99,"currency":"NOK","image":"https://example.test/logo.png"}`)
+	}))
+	t.Cleanup(upstream.Close)
+	n := newNisse(Config{AIBaseURL: upstream.URL})
+	want := Preview{URL: windflameURL}
+
+	p := want
+	n.lookup(t.Context(), "test", &p)
+	if p != want {
+		t.Errorf("nettsøket brukte kontrollsida: %+v", p)
+	}
+	p = want
+	n.enrich(t.Context(), "test", &p, "Please enable JavaScript to continue.")
+	if p != want {
+		t.Errorf("tekstoppslaget brukte kontrollsida: %+v", p)
+	}
+}
 
 func TestCleanReplyWithoutWebDropsGuessedLinks(t *testing.T) {
 	res := &aiResult{

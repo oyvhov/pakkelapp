@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ClipboardEvent, type DragEvent, type ReactNode } from 'react';
-import { Archive, ArchiveRestore, BadgeCheck, Camera, ChevronDown, ExternalLink, Heart, LayoutGrid, Link2, List, Loader2, Pencil, ReceiptText, Search, Send, Share2, Sparkles, Trash2, Users, X } from 'lucide-react';
+import { Archive, ArchiveRestore, BadgeCheck, Camera, Check, ChevronDown, ChevronRight, ExternalLink, Heart, LayoutGrid, Link2, List, Loader2, MessageCircle, Pencil, ReceiptText, RefreshCw, Search, Send, Share2, Sparkles, Trash2, Users, X } from 'lucide-react';
 import { badAmount, canEditList, firstName, errorText, fileUrl, haptic, isHttpUrl, isJul, isUpcoming, kr, money, names, parseAmount, pb, PRIORITIES, shortNames, STATUSES, type Claim, type Gift, type GiftList, type Offer, type Status } from './lib';
 import { audienceOf, claimerName, isNewWish, useData, useSeen } from './data';
 import { Avatar, Field, GiftImage, PersonPicker, personBusy, radioKeys, Segmented, Sheet, Switch, useToast, waitForPerson, type ToastAction } from './ui';
@@ -329,8 +329,9 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
       setCurrency(foreign && p.price ? `${p.price} ${foreign}` : '');
       if (p.image && !hasImage.current) {
         const res = await fetch(pb.buildURL(`/api/jul/image?url=${encodeURIComponent(p.image)}`), { headers: { Authorization: pb.authStore.token } });
-        if (res.ok && run === previewRun.current && !hasImage.current) {
-          const blob = await res.blob();
+        const blob = res.ok ? await res.blob() : null;
+        if (run !== previewRun.current) return;
+        if (blob && !hasImage.current) {
           setImage(new File([blob], `produkt.${blob.type.split('/')[1] || 'jpg'}`, { type: blob.type }), true);
         }
       }
@@ -346,8 +347,7 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
   useEffect(() => {
     const target = url.trim();
     if (!isHttpUrl(target) || target === lastFetched.current) return;
-    const t = window.setTimeout(() => void runPreview(target), 250);
-    return () => window.clearTimeout(t);
+    void runPreview(target);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
@@ -366,19 +366,27 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
       setChecking(false);
     }
   };
+  const setUrlWithoutPreview = (target: string) => {
+    previewRun.current++;
+    setFetching(false);
+    lastFetched.current = target;
+    setUrl(target);
+  };
+
   const useOffer = (o: Offer) => {
     haptic();
     setPrice(String(Math.round(o.price)));
     setShop(o.shop);
-    lastFetched.current = o.url;
-    setUrl(o.url);
+    setUrlWithoutPreview(o.url);
     setOfferKey(priceKey(title, o.url));
     setCurrency('');
   };
 
   const acceptUrl = (value: string) => {
+    const target = value.trim();
+    if (target === url && fetching) return;
     // Ei ny lenke er eit nytt produkt, så det førre sine detaljar skal ikkje henge igjen.
-    if (url) {
+    if (url && target !== url) {
       setPrice('');
       setShop('');
       setNote('');
@@ -391,8 +399,9 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
         imageFromShop.current = false;
       }
     }
-    setUrl(value.trim());
+    setUrl(target);
     setTitle('');
+    void runPreview(target);
   };
   // Innliming gjev lenka med ein gong. Når nokon skriv lenka for hand, ventar vi til dei er ferdige.
   const onMagic = (value: string) => {
@@ -495,7 +504,7 @@ function EditorForm({ draft, gift, onClose, onBusy }: { draft: Draft; gift: Gift
       {url && (
         <div className="link-pill">
           <Link2 size={14} /><span>{url.replace(/^https?:\/\/(www\.)?/, '')}</span>
-          <button type="button" aria-label="Fjern lenka" onClick={() => { setUrl(''); lastFetched.current = ''; }}><X size={14} /></button>
+          <button type="button" aria-label="Fjern lenka" onClick={() => setUrlWithoutPreview('')}><X size={14} /></button>
         </div>
       )}
 
@@ -566,15 +575,39 @@ function GiftDetail({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
+type ShopPrice = Pick<Offer, 'shop' | 'price' | 'currency' | 'url'>;
+
+function OfferLine({ offer, onUse }: { offer: ShopPrice; onUse?: (o: ShopPrice) => void }) {
+  const linked = /^https?:\/\//i.test(offer.url);
+  return (
+    <div className="shop-offer">
+      <div>
+        <strong className="shop-amount">{offer.currency === 'NOK' ? kr(offer.price) : `${offer.price} ${offer.currency}`}</strong>
+        {linked
+          ? <a className="shop-link" href={offer.url} target="_blank" rel="noreferrer noopener">{offer.shop || 'Opne tilbod'} <ExternalLink size={14} aria-hidden="true" /></a>
+          : offer.shop && <span className="shop-name">{offer.shop}</span>}
+      </div>
+      {onUse && linked && offer.currency === 'NOK' && (
+        <button type="button" className="btn small ghost" aria-label={offer.shop ? `Bruk pris frå ${offer.shop}` : 'Bruk pris'} onClick={() => onUse(offer)}>Bruk pris</button>
+      )}
+    </div>
+  );
+}
+
 function PriceBox({ gift, editable }: { gift: Gift; editable: boolean }) {
   const data = useData();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const [fresh, setFresh] = useState<{ key: string; offers: Offer[]; note: string } | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [fresh, setFresh] = useState<{ key: string; offers: Offer[]; note: string; checked: string } | null>(null);
   const key = priceKey(gift.title, gift.url);
   const current = fresh?.key === key ? fresh : null;
-  const offers = current?.offers ?? (gift.offers?.length ? gift.offers : null);
-  const note = current?.note ?? '';
+  const offers = current?.offers ?? gift.offers ?? [];
+  const best = offers[0] ?? (!current && gift.best_price > 0 ? { price: gift.best_price, shop: gift.best_shop, url: gift.best_url, currency: 'NOK' } : null);
+  const checked = current?.checked ?? gift.best_checked;
+  const hasDetails = !!(best || checked);
+  const canWatch = editable && data.config.aiEnabled && (!gift.status || gift.status === 'idea');
+  const comparison = <a className="price-link" href={`https://www.prisjakt.no/search?search=${encodeURIComponent(gift.title)}`} target="_blank" rel="noreferrer noopener">Søk på Prisjakt <ExternalLink size={14} aria-hidden="true" /></a>;
 
   const setWatch = (on: boolean) => {
     haptic();
@@ -587,13 +620,14 @@ function PriceBox({ gift, editable }: { gift: Gift; editable: boolean }) {
     setBusy(true);
     try {
       const res = await pb.send<{ offers: Offer[]; note: string; checked?: string }>('/api/jul/ai/best-price', { method: 'POST', body: { title, url } });
-      setFresh({ key: priceKey(title, url), offers: res.offers, note: res.note });
+      const checkedAt = res.checked ?? new Date().toISOString();
+      setFresh({ key: priceKey(title, url), offers: res.offers, note: res.note, checked: checkedAt });
       const best = res.offers.find((o) => o.currency === 'NOK');
       if (best && editable) {
         // Gåva kan ha blitt endra medan Nissen leita, og då gjeld ikkje funna henne lenger.
         const now = await pb.collection('gifts').getOne<Gift>(id);
         if (now.title !== title || now.url !== url) return;
-        const found = { offers: res.offers, best_price: best.price, best_shop: best.shop, best_url: best.url, best_checked: res.checked ?? '' };
+        const found = { offers: res.offers, best_price: best.price, best_shop: best.shop, best_url: best.url, best_checked: checkedAt };
         data.patch('gifts', (items) => items.map((g) => (g.id === id ? { ...g, ...found } : g)));
         await pb.collection('gifts').update(id, found);
       }
@@ -603,7 +637,7 @@ function PriceBox({ gift, editable }: { gift: Gift; editable: boolean }) {
       setBusy(false);
     }
   };
-  const use = async (o: Offer) => {
+  const useOffer = async (o: ShopPrice) => {
     haptic();
     data.patch('gifts', (items) => items.map((g) => (g.id === gift.id ? { ...g, price: o.price, shop: o.shop, url: o.url } : g)));
     try {
@@ -612,48 +646,39 @@ function PriceBox({ gift, editable }: { gift: Gift; editable: boolean }) {
     } catch (err) { toast(errorText(err)); void data.reload('gifts'); }
   };
 
+  if (!data.config.aiEnabled && !hasDetails) return comparison;
   return (
     <section className="price-box">
       <div className="price-head">
-        <div>
-          <h3>Beste pris</h3>
-          {gift.best_checked && <p className="muted">Sjekka {new Date(gift.best_checked).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}</p>}
-        </div>
+        <h3>Beste pris</h3>
         {data.config.aiEnabled && (
-          <button type="button" className="btn small gold" onClick={check} disabled={busy}>
-            {busy ? <Loader2 size={15} className="spin" /> : <Search size={15} />} {busy ? 'Leitar …' : offers ? 'Sjekk igjen' : 'Finn beste pris'}
+          <button type="button" className="price-check" onClick={check} disabled={busy}>
+            {busy ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />} {busy ? 'Søkjer …' : hasDetails ? 'Sjekk igjen' : 'Sjekk pris'}
           </button>
         )}
       </div>
-      {busy && <div className="price-loading"><span className="skeleton" /><span className="skeleton" /><span className="skeleton" /><small>Nissen går gjennom butikkane. Det kan ta eit minutt.</small></div>}
-      {!busy && offers && (
-        <>
-          {offers.length === 0 && <p className="muted">{note || 'Fann ingen sikre prisar.'}</p>}
-          <ul className="offers">
-            {offers.map((o, i) => (
-              <li key={o.url} className={i === 0 ? 'best' : ''}>
-                <div className="offer-main">
-                  <strong>{o.shop}</strong>
-                  {o.note && <small>{o.note}</small>}
-                </div>
-                <div className="offer-price">
-                  <strong>{o.currency === 'NOK' ? kr(o.price) : `${o.price} ${o.currency}`}</strong>
-                  <small className={o.verified ? 'verified' : ''}>{o.verified ? <><BadgeCheck size={12} /> Lese frå butikken</> : 'Frå søk'}</small>
-                </div>
-                <div className="offer-actions">
-                  <a className="icon-btn small" href={o.url} target="_blank" rel="noreferrer noopener" aria-label={`Opne ${o.shop}`}><ExternalLink size={15} /></a>
-                  {editable && o.currency === 'NOK' && <button type="button" className="btn small ghost" onClick={() => void use(o)}>Bruk</button>}
-                </div>
-              </li>
-            ))}
-          </ul>
-          {offers.length > 0 && <p className="field-hint">Prisar endrar seg. Sjekk summen hos butikken før du kjøper.</p>}
-        </>
-      )}
-      {editable && data.config.aiEnabled && (!gift.status || gift.status === 'idea') && (
-        <Switch checked={gift.watch_price} onChange={setWatch} label="Følg prisen" hint="Vi sjekkar kvar veke, og du får varsel om prisen går ned." />
-      )}
-      <a className="price-link" href={`https://www.prisjakt.no/search?search=${encodeURIComponent(gift.title)}`} target="_blank" rel="noreferrer noopener">Søk på Prisjakt <ExternalLink size={13} /></a>
+      {best && <OfferLine offer={best} onUse={editable ? useOffer : undefined} />}
+      {!best && checked && <p className="muted">Fann ingen tilbod.</p>}
+      <div className="price-options">
+        {hasDetails ? (
+          <button type="button" className="price-disclosure" aria-expanded={expanded} aria-controls={`price-info-${gift.id}`} onClick={() => setExpanded(!expanded)}>
+            {offers.length > 1 ? `${offers.length} tilbod` : 'Prisdetaljar'} <ChevronDown size={16} aria-hidden="true" />
+          </button>
+        ) : comparison}
+        {canWatch && <Switch checked={gift.watch_price} onChange={setWatch} label="Varsle ved prisfall" />}
+      </div>
+      {hasDetails && <div className="price-extra" id={`price-info-${gift.id}`} hidden={!expanded}>
+        {checked && <p className="price-date">Sjekka <time dateTime={checked}>{new Date(checked).toLocaleDateString('nn-NO', { day: 'numeric', month: 'short', year: 'numeric' })}</time></p>}
+        {offers.map((o, i) => (
+          <div className="offer-info" key={o.url}>
+            {i > 0 && <OfferLine offer={o} onUse={editable ? useOffer : undefined} />}
+            <small>{o.verified ? <><BadgeCheck size={14} /> Henta frå {o.shop}</> : 'Frå nettsøk'}</small>
+            {o.note && <p>{o.note}</p>}
+          </div>
+        ))}
+        {!best && current?.note && <p>{current.note}</p>}
+        {comparison}
+      </div>}
     </section>
   );
 }
@@ -665,30 +690,32 @@ function WishShare({ gift }: { gift: Gift }) {
   const [open, setOpen] = useState(false);
   const list = data.listsById.get(gift.list);
   const shared = gift.shared_with ?? [];
-  const listAudience = list ? audienceOf(data, list).people : [];
+  const listViewers = new Set(list ? audienceOf(data, list).people.map((p) => p.user) : []);
+  const viewers = new Set([...listViewers, ...shared]);
   const members = data.people.filter((p) => p.user && p.user !== data.me.id).sort((a, b) => a.name.localeCompare(b.name));
-  const sharedPeople = members.filter((p) => shared.includes(p.user));
+  const who = members.filter((p) => viewers.has(p.user)).map((p) => p.name);
   const toggle = (user: string) => {
     const next = shared.includes(user) ? shared.filter((u) => u !== user) : [...shared, user];
     data.patch('gifts', (items) => items.map((g) => (g.id === gift.id ? { ...g, shared_with: next } : g)));
     pb.collection('gifts').update(gift.id, { shared_with: next }).catch((err) => { toast(errorText(err)); void data.reload('gifts'); });
   };
-  const who = [...new Set([...listAudience, ...sharedPeople].map((p) => firstName(p.name)))];
   return (
     <section className="wish-share">
       <div className="wish-share-head">
-        <span><strong>Kven ser dette ønsket?</strong><small>{who.length ? who.join(', ') : 'Berre du'}</small></span>
+        <span><strong>Kven ser dette ønsket?</strong><small>{who.length ? `Delt med ${who.join(', ')}` : 'Berre du'}</small></span>
         <button type="button" className="btn small primary" onClick={() => setOpen(!open)} aria-expanded={open}><Share2 size={14} /> Del</button>
       </div>
       {open && (
         <div className="wish-share-pick" role="group" aria-label="Del ønsket med">
           {members.length === 0 && <p className="muted">Ingen andre har konto enno.</p>}
           {members.map((p) => {
-            const viaList = listAudience.some((x) => x.id === p.id);
-            const on = viaList || shared.includes(p.user);
+            const viaList = listViewers.has(p.user);
+            const on = viewers.has(p.user);
             return (
-              <button key={p.id} type="button" className={`chip ${on ? 'on' : ''}`} aria-pressed={on} disabled={viaList} title={viaList ? 'Ser heile lista' : undefined} onClick={() => toggle(p.user)}>
-                <Avatar person={p} size={22} /> {firstName(p.name)}
+              <button key={p.id} type="button" className="chip" aria-pressed={on} disabled={viaList} title={viaList ? 'Ser heile lista' : undefined} onClick={() => toggle(p.user)}>
+                <Avatar person={p} size={22} />
+                <span className="wish-share-name">{p.name}{viaList && <small>Via lista</small>}</span>
+                <span className="picker-check" aria-hidden="true">{on && <Check size={14} strokeWidth={3} />}</span>
               </button>
             );
           })}
@@ -715,6 +742,7 @@ function DetailBody({ gift, onClose }: { gift: Gift; onClose: () => void }) {
   const expenses = data.expenses.filter((e) => e.gift === gift.id);
   const [text, setText] = useState('');
   const [rhyme, setRhyme] = useState(gift.rhyme);
+  const [rhymeOpen, setRhymeOpen] = useState(false);
   const [rhyming, setRhyming] = useState(false);
 
   const guard = async (fn: () => Promise<unknown>) => {
@@ -793,6 +821,7 @@ function DetailBody({ gift, onClose }: { gift: Gift; onClose: () => void }) {
       const from = names(gift.givers, data.peopleById) || data.me.name;
       const res = await pb.send<{ text: string }>('/api/jul/ai/rhyme', { method: 'POST', body: { title: gift.title, to, from } });
       setRhyme(res.text);
+      setRhymeOpen(true);
       if (canUpdate) await pb.collection('gifts').update(gift.id, { rhyme: res.text });
     } catch (err) {
       toast(errorText(err, 'Nissen fann ikkje på noko rim.'));
@@ -813,26 +842,25 @@ function DetailBody({ gift, onClose }: { gift: Gift; onClose: () => void }) {
 
   return (
     <div className="detail">
-      <div className="detail-media"><GiftImage gift={gift} thumb="960x0" /></div>
-      <div className="detail-facts">
+      {(gift.image || isWish) && <div className="detail-media"><GiftImage gift={gift} thumb="960x0" /></div>}
+      {(gift.price > 0 || gift.shop || isWish) && <div className="detail-facts">
         {gift.price > 0 && <strong className="detail-price">{kr(gift.price)}</strong>}
         {gift.shop && <span>{gift.shop}</span>}
         {isWish && <span>{PRIORITIES[gift.priority] ?? ''}</span>}
-      </div>
+      </div>}
       {(to || from) && (
         <div className="tag tag-inline">
           {to && <span className="tag-line"><em>Til</em> {to}</span>}
           {from && <span className="tag-line"><em>Frå</em> {from}</span>}
         </div>
       )}
+      {!isWish && canUpdate && (
+        <div className="field"><span className="field-label">Status</span><Segmented label="Status" className={`seg-status st-${gift.status || 'idea'}`} value={(gift.status || 'idea') as Status} onChange={setStatus} options={STATUSES} /></div>
+      )}
       {!isWish && <GiverShare gift={gift} />}
       {isWish && list?.owner === data.me.id && <WishShare gift={gift} />}
       {gift.note && <p className="detail-note">{gift.note}</p>}
       {/^https?:\/\//i.test(gift.url) && <a className="btn ghost full" href={gift.url} target="_blank" rel="noreferrer noopener"><ExternalLink size={17} /> Opne i butikken</a>}
-
-      {!isWish && canUpdate && (
-        <div className="field"><span className="field-label">Status</span><Segmented label="Status" className={`seg-status st-${gift.status || 'idea'}`} value={(gift.status || 'idea') as Status} onChange={setStatus} options={STATUSES} /></div>
-      )}
 
       {isWish && !ownWish && (
         <section className="claim-box">
@@ -859,41 +887,53 @@ function DetailBody({ gift, onClose }: { gift: Gift; onClose: () => void }) {
       {!ownWish && <PriceBox gift={gift} editable={canUpdate} />}
 
       {!ownWish && (
-        <section className="pay-box">
-          <h3>Betaling</h3>
-          {expenses.map((e) => (
-            <p key={e.id} className="muted">{e.kind === 'refund' ? 'Refusjon' : 'Utlegg'} på {money(e.amount)}, betalt av {shortNames(e.payers.map((p) => p.person), data.peopleById)}, delt på {Object.values(e.allocated).filter((v) => v > 0).length}.</p>
-          ))}
-          <button type="button" className="btn ghost full" onClick={() => addExpense(expenseDraft)}><ReceiptText size={16} /> {expenses.length ? 'Legg til utlegg' : 'Registrer kven som betalte'}</button>
-        </section>
-      )}
-
-      {!ownWish && data.config.aiEnabled && (
-        <section className="rhyme">
-          {rhyme && <blockquote>{rhyme}</blockquote>}
-          <button type="button" className="btn ghost full" onClick={makeRhyme} disabled={rhyming}>
-            {rhyming ? <Loader2 size={17} className="spin" /> : <Sparkles size={17} />} {rhyme ? 'Nytt pakkerim' : 'Skriv pakkerim'}
-          </button>
-        </section>
-      )}
-
-      {!ownWish && (
-        <section className="thread">
-          <h3>Hemmeleg prat</h3>
-          {comments.map((c) => {
-            const person = data.people.find((p) => p.user === c.user);
-            return (
-              <div className="comment" key={c.id}>
-                <Avatar person={person} size={30} />
-                <div><strong>{person?.name ?? 'Nokon'}</strong><p>{c.text}</p></div>
+        <div className="gift-tools">
+          {expenses.length ? (
+            <details>
+              <summary className="gift-tool"><ReceiptText /><span>Betaling</span><small>{expenses.length}</small><ChevronDown /></summary>
+              <div className="gift-tool-content">
+                {expenses.map((e) => (
+                  <p key={e.id}>{e.kind === 'refund' ? 'Refusjon' : 'Utlegg'} på {money(e.amount)}, betalt av {shortNames(e.payers.map((p) => p.person), data.peopleById)}, delt på {Object.values(e.allocated).filter((v) => v > 0).length}.</p>
+                ))}
+                <button type="button" className="btn ghost" onClick={() => addExpense(expenseDraft)}>Legg til utlegg</button>
               </div>
-            );
-          })}
-          <form className="comment-form" onSubmit={send}>
-            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Skal vi spleise?" aria-label="Skriv ein kommentar" maxLength={2000} />
-            <button className="icon-btn" aria-label="Send" disabled={!text.trim()}><Send size={18} /></button>
-          </form>
-        </section>
+            </details>
+          ) : (
+            <button type="button" className="gift-tool" onClick={() => addExpense(expenseDraft)}><ReceiptText /><span>Registrer utlegg</span><ChevronRight /></button>
+          )}
+
+          {data.config.aiEnabled && (
+            <div>
+              <button type="button" className="gift-tool" aria-expanded={rhyme ? rhymeOpen : undefined} disabled={rhyming} onClick={rhyme ? () => setRhymeOpen(!rhymeOpen) : makeRhyme}>
+                <Sparkles /><span>{rhyming ? 'Lagar pakkerim …' : rhyme ? 'Pakkerim' : 'Lag pakkerim'}</span>
+                {rhyming ? <Loader2 className="spin" /> : rhyme ? <ChevronDown /> : <ChevronRight />}
+              </button>
+              {rhyme && rhymeOpen && <div className="gift-tool-content rhyme">
+                <blockquote>{rhyme}</blockquote>
+                <button type="button" className="btn ghost" onClick={makeRhyme} disabled={rhyming}>Lag nytt rim</button>
+              </div>}
+            </div>
+          )}
+
+          <details>
+            <summary className="gift-tool"><MessageCircle /><span>Hemmeleg prat</span>{comments.length > 0 && <small>{comments.length}</small>}<ChevronDown /></summary>
+            <div className="gift-tool-content thread">
+              {comments.map((c) => {
+                const person = data.people.find((p) => p.user === c.user);
+                return (
+                  <div className="comment" key={c.id}>
+                    <Avatar person={person} size={30} />
+                    <div><strong>{person?.name ?? 'Nokon'}</strong><p>{c.text}</p></div>
+                  </div>
+                );
+              })}
+              <form className="comment-form" onSubmit={send}>
+                <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Skriv ei melding" aria-label="Skriv ei melding" maxLength={2000} />
+                <button className="icon-btn" aria-label="Send" disabled={!text.trim()}><Send size={18} /></button>
+              </form>
+            </div>
+          </details>
+        </div>
       )}
 
       {editable && (

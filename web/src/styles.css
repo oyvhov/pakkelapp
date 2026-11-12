@@ -279,8 +279,8 @@ input:focus, textarea:focus, select:focus { outline: 2px solid var(--gold); outl
 .rhyme { display: flex; flex-direction: column; gap: 10px; }
 .rhyme blockquote { margin: 0; padding: 14px 18px; white-space: pre-line; background: var(--tag); color: var(--tag-ink); border-radius: 8px; font: italic 400 15.5px/1.55 var(--serif); }
 .thread { display: flex; flex-direction: column; gap: 11px; }
-.thread h3 { font-size: 17px; }
 .comment { display: flex; gap: 9px; }
+.comment > div { min-width: 0; }
 .comment strong { font-size: 13px; }
 .comment p { overflow-wrap: anywhere; }
 .comment-form { display: flex; gap: 6px; }
@@ -521,14 +521,43 @@ button, a, .chip, .filter, .btn { touch-action: manipulation; }
   }
 }
 
-/* Prissjekk og betaling */
-.price-box, .pay-box { display: flex; flex-direction: column; gap: 10px; padding: 15px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
-.price-box h3, .pay-box h3 { font-size: 17px; }
-.price-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.price-loading { display: flex; flex-direction: column; gap: 7px; }
-.price-loading .skeleton { height: 44px; border-radius: 10px; }
-.price-loading small, .price-link { font-size: 12.5px; color: var(--ink-2); }
-.price-link { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; }
+/* Pris og handlingar på ei gåve */
+.price-box { display: grid; padding: 4px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.price-head, .shop-offer, .price-options { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.price-head h3 { font: 600 15px/1.3 var(--sans); }
+.price-check, .price-disclosure, .price-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; font-size: 14px; font-weight: 500; color: var(--ink-2); }
+.price-link { justify-self: start; align-self: flex-start; }
+.price-check:hover, .price-disclosure:hover, .price-link:hover, .shop-link:hover { color: var(--ink); }
+.shop-offer { padding: 3px 0 14px; }
+.shop-offer > div { min-width: 0; }
+.shop-amount { display: block; font: 500 clamp(28px, 6vw, 36px)/1.15 var(--serif); letter-spacing: -.025em; overflow-wrap: anywhere; }
+.shop-link, .shop-name { color: var(--ink-2); font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.shop-link { display: inline-block; padding-block: 4px; }
+.shop-link svg { vertical-align: -.08em; }
+.shop-offer .btn { flex: none; min-height: 44px; color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+.price-options { flex-wrap: wrap; gap: 0 12px; border-top: 1px solid var(--line); }
+.price-options .switch-row { width: auto; gap: 8px; }
+.price-options .switch-row strong { font-size: 14px; font-weight: 500; }
+.price-extra:not([hidden]) { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.price-date, .offer-info small { color: var(--ink-2); font-size: 13px; }
+.offer-info { display: grid; gap: 4px; }
+.offer-info small { display: flex; align-items: center; gap: 5px; }
+.offer-info + .offer-info { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
+.offer-info .shop-offer { padding: 0; }
+.offer-info .shop-amount { font: 600 18px/1.3 var(--sans); }
+.gift-tools { border-block: 1px solid var(--line); }
+.gift-tools > * + * { border-top: 1px solid var(--line); }
+.gift-tool { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 50px; padding: 8px 4px; list-style: none; cursor: pointer; text-align: start; font-weight: 600; }
+.gift-tool::-webkit-details-marker { display: none; }
+.gift-tool > span { flex: 1; min-width: 0; }
+.gift-tool > svg { flex: none; width: 19px; height: 19px; color: var(--brand-accent); }
+.gift-tool > svg:last-child { width: 16px; height: 16px; color: var(--ink-2); }
+.gift-tool small { color: var(--ink-2); font-size: 14px; font-weight: 500; }
+.price-disclosure[aria-expanded='true'] svg, details[open] > .gift-tool > svg:last-child, .gift-tool[aria-expanded='true'] > .lucide-chevron-down { transform: rotate(180deg); }
+.gift-tool-content { display: grid; gap: 10px; padding: 0 4px 14px; overflow-wrap: anywhere; }
+.gift-tool-content .btn { justify-self: start; }
+
+/* Tilbod i gåveskjemaet */
 .offers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .offers li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; background: var(--surface-2); animation: route-in .3s var(--ease) both; }
 .offers li.best { background: var(--ok-soft); }
@@ -1305,9 +1334,16 @@ body::after { content: ''; position: fixed; inset: -25%; z-index: -2; pointer-ev
 /* Del eitt ønske med utvalde. */
 .wish-share { display: grid; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); }
 .wish-share-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.wish-share-head span { display: flex; flex-direction: column; gap: 2px; }
+.wish-share-head span { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .wish-share-head small { color: var(--ink-2); }
 .wish-share-pick { display: flex; flex-wrap: wrap; gap: 7px; }
+.wish-share-pick .chip { min-height: 44px; max-width: 100%; padding: 4px 9px 4px 6px; text-align: start; white-space: normal; font-weight: 600; }
+.wish-share-name { min-width: 0; overflow-wrap: anywhere; }
+.wish-share-name small { display: block; font-weight: 500; }
+.wish-share-pick .picker-check { width: 18px; height: 18px; border-radius: 5px; border-color: var(--ink-2); }
+.wish-share-pick .chip[aria-pressed='true'] { background: var(--ok); color: var(--surface); border-color: var(--ok); }
+.wish-share-pick [aria-pressed='true'] .picker-check { background: var(--surface); color: var(--ok); border-color: var(--ok); }
+.wish-share-pick .chip:disabled { opacity: 1; background: var(--ok-soft); color: var(--ok); }
 .wish-share-pick .field-hint { flex-basis: 100%; }
 
 .who-row .btn.who-edit { color: inherit; gap: 5px; font-weight: 600; }

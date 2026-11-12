@@ -6,6 +6,8 @@ import (
 	"testing"
 )
 
+const windflameURL = "https://www.clasohlson.com/no/Sunwind-Windflame-gassovn/p/36-8020"
+
 func TestParsePrice(t *testing.T) {
 	cases := map[string]float64{
 		"1 299,-":  1299,
@@ -26,6 +28,7 @@ func TestParsePrice(t *testing.T) {
 
 func TestTitleFromURL(t *testing.T) {
 	cases := map[string]string{
+		windflameURL: "Sunwind Windflame gassovn",
 		"https://www.moominarabia.com/no-no/products/mummi-kopp-0-3-l-vinternattsglod":  "Mummi kopp 0 3 l vinternattsglod",
 		"https://www.proshop.no/LEGO/LEGO-Classic-10698-Kreative-store-klosser/2558436": "LEGO Classic 10698 Kreative store klosser",
 		"https://butikk.no/produkt/ull-sokkar.html?farge=raud":                          "Ull sokkar",
@@ -88,5 +91,27 @@ func TestParsePage(t *testing.T) {
 	bad, _ := parsePage(`<meta property="og:image" content="javascript:alert(1)">`, base)
 	if bad.Image != "" {
 		t.Errorf("farleg bilete-URL vart godteken: %q", bad.Image)
+	}
+}
+
+func TestParsePageChallenge(t *testing.T) {
+	base, _ := url.Parse(windflameURL)
+	for _, head := range []string{
+		`<title>Client Challenge</title><meta property="og:title" content="Clas Ohlson">`,
+		`<meta property="og:title" content="CLIENT  CHALLENGE">`,
+		`<title>Just a moment...</title>`,
+	} {
+		doc := head + `<meta property="og:image" content="/logo.png"><p>Please enable JavaScript to continue.</p>`
+		if p, text := parsePage(doc, base); p != (Preview{}) || text != "" {
+			t.Errorf("kontrollsida gav produktinfo: %+v, %q", p, text)
+		}
+	}
+
+	product := `<title>Client Challenge</title><script type="application/ld+json">{"@type":"Product","name":"Sunwind Windflame gassovn"}</script>`
+	if p, _ := parsePage(product, base); p.Title != "Sunwind Windflame gassovn" {
+		t.Errorf("mista produktnamnet frå JSON-LD: %q", p.Title)
+	}
+	if p, _ := parsePage(`<title>Client Challenge – kortspel</title>`, base); p.Title != "Client Challenge – kortspel" {
+		t.Errorf("mista vanleg sidetittel: %q", p.Title)
 	}
 }

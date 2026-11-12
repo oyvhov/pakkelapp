@@ -213,6 +213,14 @@ func shopFromHost(host string) string {
 	return strings.ToUpper(host[:1]) + host[1:]
 }
 
+func isChallengeTitle(title string) bool {
+	switch strings.ToLower(strings.Join(strings.Fields(title), " ")) {
+	case "client challenge", "just a moment...", "just a moment…", "attention required! | cloudflare":
+		return true
+	}
+	return false
+}
+
 func parsePage(doc string, base *url.URL) (Preview, string) {
 	var p Preview
 	meta := map[string]string{}
@@ -299,10 +307,12 @@ loop:
 		return ""
 	}
 	if p.Title == "" {
-		p.Title = first("og:title", "twitter:title", "name")
-	}
-	if p.Title == "" {
-		p.Title = titleTag
+		metaTitle := first("og:title", "twitter:title", "name")
+		// Ei kontrollside kan svare med HTTP 200. Tom sidetekst lèt oppslaget bruke nettsøk.
+		if isChallengeTitle(titleTag) || isChallengeTitle(metaTitle) {
+			return Preview{}, ""
+		}
+		p.Title = firstNonEmpty(metaTitle, titleTag)
 	}
 	if p.Description == "" {
 		p.Description = first("og:description", "twitter:description", "description")
